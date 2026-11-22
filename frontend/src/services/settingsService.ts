@@ -76,7 +76,7 @@ export type InvoiceSettings = {
 	bonusRate: string;
 	bonusWageCeiling: string;
 	epfWageCeiling: string;
-	overheadRate: string;
+	contractorProfitRate: string;
 	serviceChargeRate: string;
 	relievingRate: string;
 	monthDays: string;
@@ -177,8 +177,8 @@ export const INVOICE_DEFAULTS: InvoiceSettings = {
 	bonusRate: '8.33',
 	bonusWageCeiling: '21000',
 	epfWageCeiling: '0',
-	overheadRate: '0',
-	serviceChargeRate: '0',
+	contractorProfitRate: '6.5',
+	serviceChargeRate: '3.26',
 	relievingRate: '16.6667',
 	monthDays: '26',
 	labourQtyType: 'mandays',

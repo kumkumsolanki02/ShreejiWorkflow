@@ -9,7 +9,7 @@ const invoiceItemSchema = new mongoose.Schema(
     rate: { type: Number, min: 0, default: 0 },
     amount: { type: Number, min: 0, default: 0 },
     section: { type: String, enum: ['service', 'supply'], default: 'service' },
-    component: { type: String, enum: ['', 'wage', 'epf', 'esic', 'bonus', 'overhead', 'service'], default: '' },
+    component: { type: String, enum: ['', 'wage', 'epf', 'esic', 'bonus', 'contractorProfit', 'overhead', 'service'], default: '' },
   },
   { _id: false },
 );
@@ -58,5 +58,6 @@ const clientInvoiceSchema = new mongoose.Schema(
 
 clientInvoiceSchema.index({ locationId: 1, month: 1 }, { unique: true });
 clientInvoiceSchema.index({ financialYear: 1, invoiceSeq: -1 });
+clientInvoiceSchema.index({ invoiceNumber: 1 });
 
 module.exports = mongoose.models.ClientInvoice || mongoose.model('ClientInvoice', clientInvoiceSchema);

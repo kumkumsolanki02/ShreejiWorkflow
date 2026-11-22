@@ -101,11 +101,13 @@ function rateRules(settings) {
   const esic = percent(settings.esicRate);
   const bonus = percent(settings.bonusRate);
   const service = percent(settings.serviceChargeRate);
+  // contractorProfitRate is the current field; older settings used overheadRate.
+  const contractorProfit = percent(settings.contractorProfitRate ?? settings.overheadRate);
   return {
     epf,
     esic,
     bonus,
-    overhead: percent(settings.overheadRate),
+    contractorProfit,
     service,
     epfCeiling: percent(settings.epfWageCeiling),
     bonusCeiling: percent(settings.bonusWageCeiling),
@@ -130,16 +132,16 @@ function bonusCapPerUnit(item, rules) {
   return isMonthly(item) ? rules.bonusCeiling : rules.bonusCeiling / rules.monthDays;
 }
 
-/** One unit (day or month) of a labour line: wages, statutory loadings, overhead on those, then service charge. */
+/** One unit (day or month): wages + EPF + ESIC + bonus, then contractor profit on those, then service charge. */
 function unitParts(item, wage, rules) {
   const wages = wage * (isMonthly(item) ? rules.monthDays : 1);
   const epf = (Math.min(wages, epfCapPerUnit(item, rules)) * rules.epf) / 100;
   const esic = (wages * rules.esic) / 100;
   const bonus = (Math.min(wages, bonusCapPerUnit(item, rules)) * rules.bonus) / 100;
   const statutory = wages + epf + esic + bonus;
-  const overhead = (statutory * rules.overhead) / 100;
-  const service = ((statutory + overhead) * rules.service) / 100;
-  return { wages, epf, esic, bonus, overhead, service, total: statutory + overhead + service };
+  const contractorProfit = (statutory * rules.contractorProfit) / 100;
+  const service = ((statutory + contractorProfit) * rules.service) / 100;
+  return { wages, epf, esic, bonus, contractorProfit, service, total: statutory + contractorProfit + service };
 }
 
 /** Employees, man-days and the man-day weighted daily wage for one skill category (blank = everyone). */
@@ -177,7 +179,7 @@ function rateDetail(source, item, stats, rules, auto) {
     `EPF ${rules.epf}%${rules.epfCeiling ? ` (ceiling ${rules.epfCeiling})` : ''}`,
     `ESIC ${rules.esic}%`,
     `Bonus ${rules.bonus}%${rules.bonusCeiling ? ` (ceiling ${rules.bonusCeiling})` : ''}`,
-    rules.overhead ? `Overhead ${rules.overhead}%` : '',
+    rules.contractorProfit ? `Contractor profit ${rules.contractorProfit}%` : '',
     rules.service ? `Service ${rules.service}%` : '',
   ].filter(Boolean).join(' + ');
   const detail = `${base} + ${parts}`;
@@ -189,7 +191,7 @@ function statutoryText(rules) {
     `EPF@${rules.epf}%`,
     `ESIC@${rules.esic}%`,
     `Bonus@${rules.bonus}%`,
-    rules.overhead ? `Overhead@${rules.overhead}%` : '',
+    rules.contractorProfit ? `Contractor profit@${rules.contractorProfit}%` : '',
     rules.service ? `Service charge@${rules.service}%` : '',
   ].filter(Boolean).join(', ');
 }
@@ -216,7 +218,7 @@ function epfLine(item, stats, rules, qty, parts) {
   return { qty, qtyDecimals: qtyDecimalsFor(item), rate: amountRate(amount, qty, perUnit), amount, capped: false };
 }
 
-/** A labour line itemised as separate wage, EPF, ESIC, bonus, overhead and service charge rows. */
+/** A labour line itemised as separate wage, EPF, ESIC, bonus, contractor profit and service charge rows. */
 function breakupItems(item, description, stats, rules, qty) {
   const parts = unitParts(item, stats.wage, rules);
   const who = `${item.skillCategory ? `${item.skillCategory} ` : ''}Manpower`;
@@ -239,9 +241,9 @@ function breakupItems(item, description, stats, rules, qty) {
   const epf = epfLine(item, stats, rules, qty, parts);
   const esic = round(qty * parts.esic);
   const bonus = round(qty * parts.bonus);
-  const overheadBase = wages + round(qty * parts.epf) + esic + bonus;
-  const overhead = round(overheadBase * rules.overhead / 100);
-  const service = round((overheadBase + overhead) * rules.service / 100);
+  const profitBase = wages + round(qty * parts.epf) + esic + bonus;
+  const contractorProfit = round(profitBase * rules.contractorProfit / 100);
+  const service = round((profitBase + contractorProfit) * rules.service / 100);
   const cap = rules.epfCeiling ? round(rules.epfCeiling * rules.epf / 100) : 0;
   const epfText = epf.capped
     ? `EPF / EDLI @ ${rules.epf}% for ${who} @${cap}/- Per Month ( Ceiling upto ${rules.epfCeiling}/- )`
@@ -252,8 +254,8 @@ function breakupItems(item, description, stats, rules, qty) {
     rules.epf ? row('epf', epfText, { qty: epf.qty, qtyDecimals: epf.qtyDecimals, rate: epf.rate, amount: epf.amount }, `${rules.epf}% of wages${rules.epfCeiling ? `, capped at ${rules.epfCeiling} per month` : ''}`) : null,
     rules.esic ? row('esic', `ESIC @ ${rules.esic}% for ${who}`, share(esic, parts.esic), `${rules.esic}% of wages`) : null,
     rules.bonus ? row('bonus', `BONUS @ ${rules.bonus}% for ${who}`, share(bonus, parts.bonus), `${rules.bonus}% of wages${rules.bonusCeiling ? `, capped at ${rules.bonusCeiling} per month` : ''}`) : null,
-    rules.overhead ? row('overhead', `Overhead Charge @ ${rules.overhead}%`, share(overhead, parts.overhead), `${rules.overhead}% of wages + EPF + ESIC + bonus`) : null,
-    rules.service ? row('service', `Service Charge @ ${rules.service}% ( Excluding GST )`, share(service, parts.service), `${rules.service}% of wages + EPF + ESIC + bonus + overhead`) : null,
+    rules.contractorProfit ? row('contractorProfit', `Contractor Profit @ ${rules.contractorProfit}%`, share(contractorProfit, parts.contractorProfit), `${rules.contractorProfit}% of wages + EPF + ESIC + bonus`) : null,
+    rules.service ? row('service', `Service Charge @ ${rules.service}% ( Excluding GST )`, share(service, parts.service), `${rules.service}% of wages + EPF + ESIC + bonus + contractor profit`) : null,
   ].filter(Boolean);
 }
 
@@ -427,18 +429,36 @@ function periodOf(month) {
   };
 }
 
-function financialYearOf(isoValue) {
-  const [year, month] = isoValue.split('-').map(Number);
-  const start = month >= 4 ? year : year - 1;
-  return `${String(start).slice(-2)}-${String(start + 1).slice(-2)}`;
+/** Calendar year as 2 digits — e.g. 2026 → "26". Used in invoice numbers like AMC/26/01. */
+function invoiceYearOf(isoValue) {
+  return String(Number(String(isoValue).slice(0, 4)) || new Date().getFullYear()).slice(-2);
 }
 
-async function nextInvoiceSeq(financialYear, settings, excludeId) {
-  const filter = { financialYear };
+function formatInvoiceNumber(prefix, year, seq) {
+  return `${prefix}/${year}/${String(seq).padStart(2, '0')}`;
+}
+
+/** Next invoice seq for the calendar year — one global series across every organization and location. */
+async function nextInvoiceSeq(invoiceYear, settings, excludeId) {
+  const year = String(invoiceYear);
+  const filter = {
+    $or: [
+      { financialYear: year },
+      { financialYear: new RegExp(`^${year}-`) }, // older FY keys like 26-27
+      { invoiceNumber: new RegExp(`/${year}/\\d+\\s*$`) },
+    ],
+  };
   if (excludeId) filter._id = { $ne: excludeId };
-  const last = await ClientInvoice.findOne(filter).sort({ invoiceSeq: -1 }).select('invoiceSeq').lean();
+  const rows = await ClientInvoice.find(filter).select('invoiceSeq invoiceNumber').lean();
+  let maxSeq = 0;
+  for (const row of rows) {
+    const fromField = Number(row.invoiceSeq) || 0;
+    const trailing = String(row.invoiceNumber || '').match(/(\d+)\s*$/);
+    const fromNumber = trailing ? Number(trailing[1]) : 0;
+    maxSeq = Math.max(maxSeq, fromField, fromNumber);
+  }
   const start = Math.max(1, Math.round(Number(settings.startNumber) || 1));
-  return last && last.invoiceSeq >= start ? last.invoiceSeq + 1 : start;
+  return maxSeq >= start ? maxSeq + 1 : start;
 }
 
 async function nextRaBillNo(location, setup, excludeId) {
@@ -449,7 +469,7 @@ async function nextRaBillNo(location, setup, excludeId) {
   return last && last.raBillNo >= first ? last.raBillNo + 1 : first;
 }
 
-/** EPF, ESIC, bonus, overhead and service charge rows repeat the man-days, so only the wage row counts toward the total quantity. */
+/** EPF, ESIC, bonus, contractor profit and service charge rows repeat the man-days, so only the wage row counts toward the total quantity. */
 function isLabourQty(item) {
   return !item.component || item.component === 'wage';
 }
@@ -636,9 +656,9 @@ async function previewInvoice(user, organizationId, locationId, query = {}) {
     ClientInvoice.findOne({ locationId: location._id, month: query.month }).lean(),
   ]);
   const today = new Date().toISOString().slice(0, 10);
-  const financialYear = financialYearOf(today);
+  const invoiceYear = invoiceYearOf(today);
   const [seq, raBillNo] = saved ? [saved.invoiceSeq, saved.raBillNo] : await Promise.all([
-    nextInvoiceSeq(financialYear, settings),
+    nextInvoiceSeq(invoiceYear, settings),
     nextRaBillNo(location, setup),
   ]);
   const items = computedItems(setup, lines, settings, period.month);
@@ -650,7 +670,7 @@ async function previewInvoice(user, organizationId, locationId, query = {}) {
     items,
     totals: computeTotals(items, setup.gstRate ?? 18),
     suggested: {
-      invoiceNumber: saved ? saved.invoiceNumber : `${settings.invoicePrefix}/${financialYear}/${seq}`,
+      invoiceNumber: saved ? saved.invoiceNumber : formatInvoiceNumber(settings.invoicePrefix, invoiceYear, seq),
       invoiceDate: saved ? saved.invoiceDate : today,
       raBillNo,
     },
@@ -694,17 +714,21 @@ async function saveInvoice(user, organizationId, locationId, month, input = {}) 
   ]);
 
   const invoiceDate = isoDate(input.invoiceDate, 'Invoice date', { required: true });
-  const financialYear = financialYearOf(invoiceDate);
+  const invoiceYear = invoiceYearOf(invoiceDate);
   let invoiceNumber = text(input.invoiceNumber, 'Invoice number', 60);
   let invoiceSeq;
   if (invoiceNumber) {
     const trailing = invoiceNumber.match(/(\d+)\s*$/);
     invoiceSeq = trailing ? Number(trailing[1]) : 0;
   } else {
-    invoiceSeq = await nextInvoiceSeq(financialYear, settings, existing?._id);
-    invoiceNumber = `${settings.invoicePrefix}/${financialYear}/${invoiceSeq}`;
+    invoiceSeq = await nextInvoiceSeq(invoiceYear, settings, existing?._id);
+    invoiceNumber = formatInvoiceNumber(settings.invoicePrefix, invoiceYear, invoiceSeq);
   }
-  const clash = await ClientInvoice.findOne({ invoiceNumber, _id: { $ne: existing?._id } }).select('month locationId').lean();
+  // Global uniqueness — one continuous series across all organizations.
+  const clash = await ClientInvoice.findOne({
+    invoiceNumber,
+    _id: { $ne: existing?._id },
+  }).select('month locationId organizationId').lean();
   if (clash) throw httpError(409, `Invoice number ${invoiceNumber} is already used by another invoice.`);
 
   const raBillNo = input.raBillNo === undefined || input.raBillNo === ''
@@ -734,7 +758,7 @@ async function saveInvoice(user, organizationId, locationId, month, input = {}) 
     locationId: location._id,
     month,
     invoiceNumber,
-    financialYear,
+    financialYear: invoiceYear,
     invoiceSeq,
     invoiceDate,
     raBillNo,

@@ -41,7 +41,7 @@ export type InvoiceSetup = {
 	gstRate: number;
 	firstRaBillNo: number;
 	autoLabour: boolean;
-	/** Labour lines printed as separate wage, EPF, ESIC, bonus, overhead and service charge rows. */
+	/** Labour lines printed as separate wage, EPF, ESIC, bonus, contractor profit and service charge rows. */
 	rateBreakup: boolean;
 	labourQtyType: LabourQtySource | '';
 	items: InvoiceSetupItem[];
@@ -54,14 +54,15 @@ export type InvoiceSetup = {
 
 export type InvoiceSetupInput = Omit<InvoiceSetup, 'saved' | 'defaultLabourQty' | 'defaultVendorCode' | 'defaultWorkTitle' | 'defaultLoaNumber' | 'defaultSapPo'>;
 
-export type InvoiceComponent = '' | 'wage' | 'epf' | 'esic' | 'bonus' | 'overhead' | 'service';
+export type InvoiceComponent = '' | 'wage' | 'epf' | 'esic' | 'bonus' | 'contractorProfit' | 'overhead' | 'service';
 
 export const COMPONENT_LABELS: Record<Exclude<InvoiceComponent, ''>, string> = {
 	wage: 'Wages',
 	epf: 'EPF / EDLI',
 	esic: 'ESIC',
 	bonus: 'Bonus',
-	overhead: 'Overhead',
+	contractorProfit: 'Contractor profit',
+	overhead: 'Contractor profit',
 	service: 'Service charge',
 };
 

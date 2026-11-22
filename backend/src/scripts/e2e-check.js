@@ -28,11 +28,12 @@ const WAGE_LEVELS = [
   ['2025-04', 10, 12.5, 20000, 0.75, 21000], ['2025-07', 12, 12.5, 20000, 1, 25000], ['2025-10', 8.33, 13, 20000, 1, 25000],
   ['2026-01', 9, 13, 25000, 0.75, 25000], ['2026-04', 8.33, 12, 25000, 0.75, 21000], ['2026-08', 8.33, 12, 0, 0.75, 21000],
 ];
-const INVOICE_DEFAULT = { epfRate: 13, esicRate: 3.25, bonusRate: 8.33, serviceChargeRate: 0, relievingRate: 16.6667, monthDays: 26 };
+const INVOICE_DEFAULT = { epfRate: 13, esicRate: 3.25, bonusRate: 8.33, contractorProfitRate: 6.5, serviceChargeRate: 3.26, relievingRate: 16.6667, monthDays: 26 };
+// [from, epf, esic, bonus, serviceCharge, relieving, contractorProfit]
 const INVOICE_LEVELS = [
-  ['2023-12', 13, 4.75, 8.33, 0, 16.6667], ['2024-04', 13, 3.25, 8.33, 0, 16.6667], ['2024-09', 13, 3.25, 10, 2, 16.6667],
-  ['2025-01', 13.5, 3.25, 10, 2, 16.6667], ['2025-04', 13.5, 3.25, 12, 3, 15], ['2025-10', 13, 3.25, 8.33, 3, 16.6667],
-  ['2026-01', 13, 3.5, 9, 2.5, 16.6667], ['2026-06', 13, 3.25, 8.33, 0, 16.6667], ['2026-10', 13, 3.25, 8.33, 1.5, 16.6667],
+  ['2023-12', 13, 4.75, 8.33, 0, 16.6667, 0], ['2024-04', 13, 3.25, 8.33, 0, 16.6667, 0], ['2024-09', 13, 3.25, 10, 2, 16.6667, 0],
+  ['2025-01', 13.5, 3.25, 10, 2, 16.6667, 0], ['2025-04', 13.5, 3.25, 12, 3, 15, 0], ['2025-10', 13, 3.25, 8.33, 3, 16.6667, 0],
+  ['2026-01', 13, 3.5, 9, 2.5, 16.6667, 0], ['2026-06', 13, 3.25, 8.33, 0, 16.6667, 0], ['2026-10', 13, 3.25, 8.33, 3.26, 16.6667, 6.5],
 ];
 const TEST_MONTHS = ['2023-12', '2024-03', '2024-05', '2024-10', '2025-01', '2025-04', '2025-07', '2025-10', '2026-01', '2026-04', '2026-08', '2026-10'];
 
@@ -72,8 +73,8 @@ function wageLevel(month) {
 function invoiceLevel(month) {
   const level = [...INVOICE_LEVELS].reverse().find(([from]) => from <= month);
   if (!level) return INVOICE_DEFAULT;
-  const [, epfRate, esicRate, bonusRate, serviceChargeRate, relievingRate] = level;
-  return { epfRate, esicRate, bonusRate, serviceChargeRate, relievingRate, monthDays: 26 };
+  const [, epfRate, esicRate, bonusRate, serviceChargeRate, relievingRate, contractorProfitRate = 0] = level;
+  return { epfRate, esicRate, bonusRate, serviceChargeRate, relievingRate, contractorProfitRate, monthDays: 26 };
 }
 
 let http;
@@ -232,7 +233,7 @@ async function testOldMonthRates(model, admin) {
   const oldRegister = await call('GET', '/attendance/wage-register', { cookie: admin, query: { ...ids, month: '2021-11' } });
   check('Nov 2021 wage register answers', oldRegister.status === 200, oldRegister.status);
   const oldInvoice = await call('GET', `/organizations/${ids.organizationId}/locations/${ids.locationId}/invoices/preview`, { cookie: admin, query: { month: '2021-11' } });
-  check('Nov 2021 invoice preview uses default % (before the first change)', oldInvoice.status === 200 && near(oldInvoice.data.settings.esicRate, 3.25) && near(oldInvoice.data.settings.serviceChargeRate, 0), JSON.stringify(oldInvoice.data.settings || oldInvoice.data).slice(0, 300));
+  check('Nov 2021 invoice preview uses default % (before the first change)', oldInvoice.status === 200 && near(oldInvoice.data.settings.esicRate, 3.25) && near(oldInvoice.data.settings.serviceChargeRate, 3.26) && near(oldInvoice.data.settings.contractorProfitRate, 6.5), JSON.stringify(oldInvoice.data.settings || oldInvoice.data).slice(0, 300));
 }
 
 async function testInvoices(model, admin) {
@@ -258,15 +259,15 @@ async function testInvoices(model, admin) {
         const manDays = group.reduce((sum, row) => sum + row.paid, 0);
         const wage = r2(group.reduce((sum, row) => sum + model.dailyOn(row.employee, lastDay(month)) * row.paid, 0) / manDays);
         const monthly = labour[index]?.qtySource !== 'mandays';
-        const rate = r2(wage * (monthly ? 26 : 1) * (1 + loading) * (1 + rules.serviceChargeRate / 100));
+        const rate = r2(wage * (monthly ? 26 : 1) * (1 + loading) * (1 + rules.contractorProfitRate / 100) * (1 + rules.serviceChargeRate / 100));
         if (!labour[index] || !near(labour[index].rate, rate)) errors.push(`${category}: ${labour[index]?.rate} ≠ ${rate}`);
       });
-      check(`${tag}: labour rate = month's wage × (1 + EPF + ESIC + bonus) × (1 + service)`, errors.length === 0 && labour.length === categories.length, errors.join('; ') || `${labour.length} lines for ${categories.length} categories`);
+      check(`${tag}: labour rate = month's wage × (1 + EPF + ESIC + bonus) × (1 + contractor profit) × (1 + service)`, errors.length === 0 && labour.length === categories.length, errors.join('; ') || `${labour.length} lines for ${categories.length} categories`);
       const relieving = preview.data.items.find((item) => item.rateSource === 'relieving');
       if (relieving && working.length) {
         const manDays = working.reduce((sum, row) => sum + row.paid, 0);
         const wageAll = r2(working.reduce((sum, row) => sum + model.dailyOn(row.employee, lastDay(month)) * row.paid, 0) / manDays);
-        const perDay = r2(wageAll * (1 + loading) * (1 + rules.serviceChargeRate / 100));
+        const perDay = r2(wageAll * (1 + loading) * (1 + rules.contractorProfitRate / 100) * (1 + rules.serviceChargeRate / 100));
         const want = r2(perDay * rules.relievingRate / 100);
         check(`${tag}: relieving charge = ${rules.relievingRate}% of the month's per-day rate`, near(relieving.rate, want, 0.02), `${relieving.rate} vs ${want}`);
       }
@@ -280,11 +281,13 @@ async function testInvoices(model, admin) {
   const saved = await ClientInvoice.find({}).lean();
   check('90 seeded invoices saved (Jun 2024, Jun 2025, Jun 2026 × 30 locations)', saved.length >= 90, saved.length);
   check('Invoice numbers are unique', new Set(saved.map((invoice) => invoice.invoiceNumber)).size === saved.length);
-  const byFy = new Map();
-  for (const invoice of saved) byFy.set(invoice.financialYear, [...(byFy.get(invoice.financialYear) || []), invoice.invoiceSeq]);
-  for (const [fy, seqs] of byFy) {
+  const byYear = new Map();
+  for (const invoice of saved) {
+    byYear.set(invoice.financialYear, [...(byYear.get(invoice.financialYear) || []), invoice.invoiceSeq]);
+  }
+  for (const [year, seqs] of byYear) {
     const sorted = [...seqs].sort((a, b) => a - b);
-    check(`Financial year ${fy}: invoice numbers run 1..${sorted.length} without gaps`, sorted.every((seq, index) => seq === index + 1), sorted.join(','));
+    check(`Year ${year}: invoice numbers run 1..${sorted.length} without gaps`, sorted.every((seq, index) => seq === index + 1), sorted.join(','));
   }
   for (const invoice of saved.filter((_, index) => index % 6 === 0)) {
     const preview = await call('GET', `/organizations/${invoice.organizationId}/locations/${invoice.locationId}/invoices/preview`, { cookie: admin, query: { month: invoice.month } });

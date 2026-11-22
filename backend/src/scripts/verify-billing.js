@@ -111,6 +111,7 @@ async function verifyLocationMonth({ user, organization, location, month, skills
 
   const settings = await getInvoiceSettingsFor(month);
   const loading = (Number(settings.epfRate) + Number(settings.esicRate) + Number(settings.bonusRate)) / 100;
+  const contractorProfit = Number(settings.contractorProfitRate || settings.overheadRate || 0) / 100;
   const serviceCharge = Number(settings.serviceChargeRate || 0) / 100;
   const preview = await invoices.previewInvoice(user, String(organization._id), String(location._id), { month });
   const all = [...expected.values()];
@@ -132,14 +133,14 @@ async function verifyLocationMonth({ user, organization, location, month, skills
     const manDays = busy.reduce((sum, row) => sum + row.paidDays, 0);
     const monthly = qtyType !== 'mandays';
     const qty = qtyType === 'manmonths' ? Math.round((manDays / monthDays + Number.EPSILON) * 1000) / 1000 : qtyType === 'persons' ? (manDays > 0 ? busy.length : 0) : r2(manDays);
-    const rate = r2(wageOf(group) * (monthly ? monthDays : 1) * (1 + loading) * (1 + serviceCharge));
+    const rate = r2(wageOf(group) * (monthly ? monthDays : 1) * (1 + loading) * (1 + contractorProfit) * (1 + serviceCharge));
     return { qty, rate, amount: r2(qty * rate) };
   });
   const relievingRate = Number(settings.relievingRate || 0) / 100;
   const relieving = (setup?.items || [])
     .filter((item) => item.section === 'service' && item.rateSource === 'relieving' && billedIn(item, month))
     .map((item) => {
-      const rate = r2(r2(wageOf(all) * (1 + loading) * (1 + serviceCharge)) * relievingRate);
+      const rate = r2(r2(wageOf(all) * (1 + loading) * (1 + contractorProfit) * (1 + serviceCharge)) * relievingRate);
       return { qty: item.defaultQty || 0, rate, amount: r2((item.defaultQty || 0) * rate) };
     });
   const supplyItems = setup ? setup.items : [{ section: 'supply', rate: 0, defaultQty: 0 }];
