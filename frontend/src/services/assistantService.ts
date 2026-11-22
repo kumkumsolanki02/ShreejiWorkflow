@@ -1,5 +1,3 @@
-import api from './api';
-
 export type AssistantDocumentType = 'salary_slip' | 'payroll' | 'wage_register' | 'attendance_register' | 'bank_invoice' | 'payroll_run' | 'client_invoice';
 export type AssistantFormat = 'pdf' | 'excel';
 
@@ -83,6 +81,13 @@ export type AssistantFeedbackSummary = {
   repeatedErrors: Array<{ type: string; count: number }>;
 };
 
+const DISABLED_REPLY = 'Assistant backend API हटा दी गई है। UI अभी उपलब्ध है, लेकिन chat/feedback server पर नहीं जाते।';
+
+function emptySessionId(sessionId?: string | null) {
+  return sessionId || `local-${Date.now()}`;
+}
+
+/** Assistant APIs removed from backend — stubs keep the UI running without network calls. */
 export async function askAssistant(
   input: {
     message?: string;
@@ -93,25 +98,26 @@ export async function askAssistant(
     confirmPendingActionId?: string;
     cancel?: boolean;
   },
-  signal?: AbortSignal,
-) {
-  const { data } = await api.post<AssistantResponse>('/assistant/chat', {
-    ...input,
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  }, { signal, timeout: 60_000 });
-  return data;
+  _signal?: AbortSignal,
+): Promise<AssistantResponse> {
+  return {
+    success: false,
+    reply: DISABLED_REPLY,
+    source: 'validation',
+    sessionId: emptySessionId(input.sessionId),
+    error: { code: 'assistant_removed', message: DISABLED_REPLY, retryable: false },
+  };
 }
 
 export async function getAssistantSession(sessionId: string) {
-  const { data } = await api.get<{ sessionId: string; messages: AssistantSessionMessage[] }>(`/assistant/session/${sessionId}`);
-  return data;
+  return { sessionId, messages: [] as AssistantSessionMessage[] };
 }
 
-export async function deleteAssistantSession(sessionId: string) {
-  await api.delete(`/assistant/session/${sessionId}`);
+export async function deleteAssistantSession(_sessionId: string) {
+  return undefined;
 }
 
-export async function submitAssistantFeedback(input: {
+export async function submitAssistantFeedback(_input: {
   type: AssistantFeedbackType;
   sessionId?: string | null;
   originalRequest?: string;
@@ -121,16 +127,23 @@ export async function submitAssistantFeedback(input: {
   correction?: string;
   expectedBehaviour?: string;
 }) {
-  const { data } = await api.post('/assistant/feedback', input);
-  return data as { success: boolean; feedback: { id: string; type: string; status: string } };
+  return {
+    success: false,
+    feedback: { id: '', type: '', status: 'rejected' },
+  };
 }
 
-export async function listAssistantFeedback(status?: string) {
-  const { data } = await api.get('/assistant/feedback', { params: status ? { status } : undefined });
-  return data as {
-    success: boolean;
-    summary: AssistantFeedbackSummary;
-    items: Array<{
+export async function listAssistantFeedback(_status?: string) {
+  return {
+    success: true,
+    summary: {
+      total: 0,
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      repeatedErrors: [],
+    } satisfies AssistantFeedbackSummary,
+    items: [] as Array<{
       id: string;
       type: string;
       status: string;
@@ -139,11 +152,13 @@ export async function listAssistantFeedback(status?: string) {
       correction: string;
       expectedBehaviour: string;
       createdAt: string;
-    }>;
+    }>,
   };
 }
 
-export async function reviewAssistantFeedback(id: string, body: { status: 'approved' | 'rejected'; reviewNote?: string }) {
-  const { data } = await api.post(`/assistant/feedback/${id}/review`, body);
-  return data;
+export async function reviewAssistantFeedback(
+  _id: string,
+  _body: { status: 'approved' | 'rejected'; reviewNote?: string },
+) {
+  return { success: false };
 }
