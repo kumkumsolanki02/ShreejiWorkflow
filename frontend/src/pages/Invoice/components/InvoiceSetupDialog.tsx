@@ -31,6 +31,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ActionButton, FormInput } from '../../../components/ui';
 import { ApiError } from '../../../services/api';
 import {
+	LABOUR_LAYOUT_OPTIONS,
 	LABOUR_QTY_OPTIONS,
 	saveInvoiceSetup,
 	type InvoiceItem,
@@ -38,6 +39,7 @@ import {
 	type InvoiceSetupInput,
 	type BillingFrequency,
 	type InvoiceSetupItem,
+	type LabourLayout,
 	type LabourQtySource,
 	type QtySource,
 	type RateSource,
@@ -98,7 +100,8 @@ function toInput(setup: InvoiceSetup): InvoiceSetupInput {
 		gstRate: setup.gstRate,
 		firstRaBillNo: setup.firstRaBillNo,
 		autoLabour: setup.autoLabour,
-		rateBreakup: setup.rateBreakup !== false,
+		labourLayout: setup.labourLayout || (setup.rateBreakup === false ? 'inclusive' : 'itemised'),
+		rateBreakup: (setup.labourLayout || (setup.rateBreakup === false ? 'inclusive' : 'itemised')) === 'itemised',
 		labourQtyType: setup.labourQtyType ?? '',
 		items: setup.items.map((item) => ({ ...item, frequency: item.frequency ?? 'monthly', billMonth: item.billMonth ?? '', rateSource: item.rateSource === 'fixed' && item.section !== 'supply' ? 'auto' : item.rateSource })),
 	};
@@ -210,16 +213,38 @@ function InvoiceSetupDialog({ isOpen, organizationId, locationId, setup, skillCa
 							</SimpleGrid>
 						</SimpleGrid>
 
-						<Flex p={3} justify="space-between" align="center" gap={3} border="1px solid" borderColor="slate.200" borderRadius="md">
-							<Box>
-								<Text fontWeight="700" color="slate.900">Itemised rate breakup</Text>
-								<Text fontSize="xs" color="slate.600">
-									Each labour line prints as separate rows: wages, EPF / EDLI, ESIC, bonus, overhead and service charge (rows with 0% are left out).
-									Turn off to print one all-inclusive rate per line.
-								</Text>
-							</Box>
-							<Switch colorScheme="brand" isChecked={values.rateBreakup} onChange={(event) => setField('rateBreakup', event.target.checked)} />
-						</Flex>
+						<Box p={3} border="1px solid" borderColor="slate.200" borderRadius="md">
+							<Text fontWeight="700" color="slate.900">Labour table format for this location</Text>
+							<Text fontSize="xs" color="slate.600" mt={1}>
+								Each location can use a different invoice table layout. Pick the style that matches this site&apos;s bill.
+							</Text>
+							<SimpleGrid columns={{ base: 1, md: 3 }} spacing={3} mt={3}>
+								{LABOUR_LAYOUT_OPTIONS.map((option) => {
+									const selected = values.labourLayout === option.value;
+									return (
+										<Box
+											key={option.value}
+											as="button"
+											type="button"
+											textAlign="left"
+											p={3}
+											border="2px solid"
+											borderColor={selected ? 'brand.400' : 'slate.200'}
+											bg={selected ? 'brand.50' : 'white'}
+											borderRadius="md"
+											onClick={() => {
+												setField('labourLayout', option.value as LabourLayout);
+												setField('rateBreakup', option.value === 'itemised');
+											}}
+										>
+											<Text fontSize="sm" fontWeight="700" color="slate.900">{option.label}</Text>
+											<Text fontSize="xs" color="brand.600" fontWeight="600" mt={0.5}>{option.sample}</Text>
+											<Text fontSize="xs" color="slate.600" mt={1.5} lineHeight="1.4">{option.hint}</Text>
+										</Box>
+									);
+								})}
+							</SimpleGrid>
+						</Box>
 
 						<Box p={3} border="1px solid" borderColor="brand.100" bg="brand.50" borderRadius="md">
 							<Flex justify="space-between" align="center" gap={3}>

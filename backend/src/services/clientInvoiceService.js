@@ -17,7 +17,14 @@ const LABOUR_LINE = {
 const RATE_SOURCES = new Set(['auto', 'relieving', 'fixed']);
 const SECTIONS = new Set(['service', 'supply']);
 const FREQUENCIES = new Set(['monthly', 'yearly', 'once']);
+const LABOUR_LAYOUTS = new Set(['itemised', 'statutory', 'inclusive']);
 const MAX_ITEMS = 30;
+
+/** Resolve the per-location labour table format (falls back from older rateBreakup boolean). */
+function labourLayoutOf(setup) {
+  if (LABOUR_LAYOUTS.has(setup?.labourLayout)) return setup.labourLayout;
+  return setup?.rateBreakup === false ? 'inclusive' : 'itemised';
+}
 
 function requireAdmin(user) {
   if (user.role !== 'admin') throw httpError(403, 'Only admins can manage invoices.');
@@ -166,9 +173,13 @@ function isMonthly(item) {
   return item.qtySource === 'manmonths' || item.qtySource === 'persons' || /month/i.test(item.unit || '');
 }
 
-function autoRate(item, stats, rules) {
+function autoRate(item, stats, rules, layout = 'inclusive') {
   const parts = unitParts(item, stats.wage, rules);
-  return { wages: round(parts.wages), rate: round(parts.total) };
+  if (layout === 'statutory') {
+    // Magarwada-style: wages + EPF + ESIC + bonus only (no contractor profit / service in the labour rate).
+    return { wages: round(parts.wages), rate: round(parts.wages + parts.epf + parts.esic + parts.bonus), parts };
+  }
+  return { wages: round(parts.wages), rate: round(parts.total), parts };
 }
 
 function rateDetail(source, item, stats, rules, auto) {
@@ -186,14 +197,17 @@ function rateDetail(source, item, stats, rules, auto) {
   return source === 'relieving' ? `${round(rules.relieving * 100, 4)}% of (${detail})` : detail;
 }
 
-function statutoryText(rules) {
-  return [
+function statutoryText(rules, layout = 'inclusive') {
+  const bits = [
     `EPF@${rules.epf}%`,
     `ESIC@${rules.esic}%`,
     `Bonus@${rules.bonus}%`,
-    rules.contractorProfit ? `Contractor profit@${rules.contractorProfit}%` : '',
-    rules.service ? `Service charge@${rules.service}%` : '',
-  ].filter(Boolean).join(', ');
+  ];
+  if (layout !== 'statutory') {
+    if (rules.contractorProfit) bits.push(`Contractor profit@${rules.contractorProfit}%`);
+    if (rules.service) bits.push(`Service charge@${rules.service}%`);
+  }
+  return bits.filter(Boolean).join(', ');
 }
 
 function amountRate(amount, qty, perUnit) {
@@ -259,12 +273,18 @@ function breakupItems(item, description, stats, rules, qty) {
   ].filter(Boolean);
 }
 
-/** Bracketed working printed under the description, e.g. "(Supervisor & Cook @781.00= 20306/- PM, EPF@13%, ...)". */
-function explanation(source, item, stats, rules, auto) {
+/** Bracketed / trailing note under the description for combined layouts. */
+function explanation(source, item, stats, rules, auto, layout = 'inclusive') {
   if (source !== 'auto' || !stats.wage) return '';
   const who = stats.designation || item.skillCategory || 'Manpower';
-  if (isMonthly(item)) return `(${who} @${stats.wage.toFixed(2)}= ${Math.round(auto.wages)}/- PM, ${statutoryText(rules)})`;
-  return `(${who} @${stats.wage.toFixed(2)} Per day, ${statutoryText(rules)})`;
+  if (layout === 'inclusive') {
+    // Rangpo-style: one all-in rate with a short statutory note.
+    if (isMonthly(item)) return `(${who}@${stats.wage.toFixed(2)} Per days) Including all total Statutory Wages`;
+    return `(${who}@${stats.wage.toFixed(2)} Per day) Including all total Statutory Wages`;
+  }
+  // Magarwada-style: name EPF / ESIC / Bonus in the description.
+  if (isMonthly(item)) return `(${who} @${stats.wage.toFixed(2)}= ${Math.round(auto.wages)}/- PM, ${statutoryText(rules, layout)})`;
+  return `(${who} @${stats.wage.toFixed(2)} Per day, ${statutoryText(rules, layout)})`;
 }
 
 function fillDescription(description, stats, rules, item) {
@@ -272,7 +292,7 @@ function fillDescription(description, stats, rules, item) {
   return description
     .replace(/\{count\}/gi, String(stats.count))
     .replace(/\{category\}\s*/gi, item.skillCategory ? `${item.skillCategory} ` : '')
-    .replace(/\{statutory\}/gi, statutoryText(rules))
+    .replace(/\{statutory\}/gi, statutoryText(rules, 'statutory'))
     .replace(/\{mandays\}/gi, String(round(stats.manDays)))
     .replace(/\{designation\}/gi, stats.designation || '')
     .replace(/\{wage\}/gi, stats.wage.toFixed(2))
@@ -310,7 +330,8 @@ function publicSetup(setup, location, settings) {
       billMonth: item.billMonth || '',
     })),
     autoLabour: setup.autoLabour !== false,
-    rateBreakup: setup.rateBreakup !== false,
+    labourLayout: labourLayoutOf(setup),
+    rateBreakup: labourLayoutOf(setup) === 'itemised',
     labourQtyType: LABOUR_QTY_SOURCES.has(setup.labourQtyType) ? setup.labourQtyType : '',
     defaultLabourQty: labourQtyDefault(settings),
     defaultVendorCode: settings.vendorCode,
@@ -334,6 +355,7 @@ async function loadSetup(location) {
     gstRate: 18,
     firstRaBillNo: 1,
     autoLabour: true,
+    labourLayout: 'itemised',
     rateBreakup: true,
     labourQtyType: '',
     items: defaultItems([]).filter((item) => item.section === 'supply'),
@@ -408,7 +430,11 @@ async function saveInvoiceSetup(user, organizationId, locationId, input = {}) {
     gstRate: round(number(input.gstRate, 'Tax rate', { max: 100, fallback: 18 })),
     firstRaBillNo: Math.round(number(input.firstRaBillNo, 'First RA bill number', { min: 1, max: 100000, fallback: 1 })),
     autoLabour: input.autoLabour !== false,
-    rateBreakup: input.rateBreakup !== false,
+    labourLayout: labourLayoutOf({
+      labourLayout: input.labourLayout,
+      rateBreakup: input.rateBreakup,
+    }),
+    rateBreakup: labourLayoutOf({ labourLayout: input.labourLayout, rateBreakup: input.rateBreakup }) === 'itemised',
     labourQtyType: LABOUR_QTY_SOURCES.has(input.labourQtyType) ? input.labourQtyType : '',
     items: parseSetupItems(input.items, input.autoLabour !== false),
   };
@@ -619,16 +645,23 @@ function quantityOf(item, stats, rules) {
 
 function computedItems(setup, lines, settings, month) {
   const rules = rateRules(settings);
+  const layout = labourLayoutOf(setup);
   return sortedItems(effectiveItems(setup, lines, settings, month).flatMap((item) => {
     const stats = groupStats(lines, item.skillCategory || '');
     const qty = quantityOf(item, stats, rules);
     const source = rateSourceOf(item);
-    if (setup.rateBreakup !== false && source === 'auto' && item.section !== 'supply' && stats.wage) {
+    if (layout === 'itemised' && source === 'auto' && item.section !== 'supply' && stats.wage) {
       return breakupItems(item, fillDescription(item.description, stats, rules, item), stats, rules, qty);
     }
-    const auto = autoRate(item, stats, rules);
-    const rate = source === 'fixed' ? item.rate || 0 : source === 'relieving' ? round(auto.rate * rules.relieving) : auto.rate;
-    const working = item.explain === false ? '' : explanation(source, item, stats, rules, auto);
+    const auto = autoRate(item, stats, rules, layout);
+    // Relieving always uses the full inclusive auto rate as its base.
+    const inclusive = autoRate(item, stats, rules, 'inclusive');
+    const rate = source === 'fixed'
+      ? item.rate || 0
+      : source === 'relieving'
+        ? round(inclusive.rate * rules.relieving)
+        : auto.rate;
+    const working = item.explain === false ? '' : explanation(source, item, stats, rules, auto, layout);
     return {
       description: [fillDescription(item.description, stats, rules, item), working].filter(Boolean).join('\n'),
       unit: item.unit || '',
@@ -640,7 +673,8 @@ function computedItems(setup, lines, settings, month) {
       qtySource: item.qtySource || 'manual',
       skillCategory: item.skillCategory || '',
       rateSource: source,
-      rateDetail: rateDetail(source, item, stats, rules, auto),
+      rateDetail: rateDetail(source, item, stats, rules, source === 'relieving' ? inclusive : auto),
+      labourLayout: layout,
     };
   }));
 }

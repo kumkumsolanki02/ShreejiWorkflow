@@ -61,7 +61,7 @@ function InvoiceSettingsPanel() {
 			<FormSection title="Rate calculation">
 				<Text fontSize="xs" color="slate.500">
 					Wages + EPF + ESIC + bonus, then contractor profit on that base, then service charge on the lot. Month lines use daily wage × paid days in a month.
-					With the itemised breakup on (Invoice setup), each part prints as its own row.
+					Each location picks its table format in Invoice setup (itemised, statutory-in-description, or all-inclusive).
 				</Text>
 				<SimpleGrid columns={{ base: 1, sm: 3 }} spacing={4}>
 					<FormInput label="EPF / EDLI (%)" type="number" min={0} max={100} step="0.01" value={values.epfRate} onChange={(event) => setField('epfRate', event.target.value)} />

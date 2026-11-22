@@ -31,7 +31,15 @@ const invoiceSetupSchema = new mongoose.Schema(
     gstRate: { type: Number, min: 0, max: 100, default: 18 },
     firstRaBillNo: { type: Number, min: 1, default: 1 },
     autoLabour: { type: Boolean, default: true },
+    /** @deprecated Prefer labourLayout. Kept so older setups still load. */
     rateBreakup: { type: Boolean, default: true },
+    /**
+     * Per-location labour table format:
+     * - itemised: separate wage / EPF / ESIC / bonus / contractor profit / service rows (Betul sample)
+     * - statutory: one line with EPF/ESIC/Bonus named in the description (Magarwada sample)
+     * - inclusive: one all-in rate line "Including all total Statutory Wages" (Rangpo sample)
+     */
+    labourLayout: { type: String, enum: ['itemised', 'statutory', 'inclusive', ''], default: '' },
     labourQtyType: { type: String, enum: ['', 'mandays', 'manmonths', 'persons'], default: '' },
     items: { type: [setupItemSchema], default: [] },
   },
