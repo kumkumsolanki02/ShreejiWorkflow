@@ -13,6 +13,8 @@
     "seed:malikhera": "node src/scripts/seed-malikhera.js",
     "seed:months": "node src/scripts/seed-three-months.js",
     "test": "node --test",
+    "test:assistant": "node src/assistant/scripts/smoke-nlu.js",
+    "test:assistant:api": "node src/assistant/scripts/smoke-api.js",
     "verify:billing": "node src/scripts/verify-billing.js"
   },
   "keywords": [],

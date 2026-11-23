@@ -1,3 +1,5 @@
+import api from './api';
+
 export type AssistantDocumentType = 'salary_slip' | 'payroll' | 'wage_register' | 'attendance_register' | 'bank_invoice' | 'payroll_run' | 'client_invoice';
 export type AssistantFormat = 'pdf' | 'excel';
 
@@ -7,6 +9,9 @@ export type AssistantDocument = {
   month: string;
   organizationId: string | null;
   locationId: string | null;
+  /** When set (org “all locations”), download loops one file per location for registers/bank. */
+  locationIds?: string[] | null;
+  locationScope?: 'single' | 'all_in_org' | null;
   employeeIds: string[] | null;
   batchId?: string | null;
   reprint?: boolean;
@@ -81,13 +86,6 @@ export type AssistantFeedbackSummary = {
   repeatedErrors: Array<{ type: string; count: number }>;
 };
 
-const DISABLED_REPLY = 'Assistant backend API हटा दी गई है। UI अभी उपलब्ध है, लेकिन chat/feedback server पर नहीं जाते।';
-
-function emptySessionId(sessionId?: string | null) {
-  return sessionId || `local-${Date.now()}`;
-}
-
-/** Assistant APIs removed from backend — stubs keep the UI running without network calls. */
 export async function askAssistant(
   input: {
     message?: string;
@@ -98,26 +96,24 @@ export async function askAssistant(
     confirmPendingActionId?: string;
     cancel?: boolean;
   },
-  _signal?: AbortSignal,
+  signal?: AbortSignal,
 ): Promise<AssistantResponse> {
-  return {
-    success: false,
-    reply: DISABLED_REPLY,
-    source: 'validation',
-    sessionId: emptySessionId(input.sessionId),
-    error: { code: 'assistant_removed', message: DISABLED_REPLY, retryable: false },
-  };
+  const { data } = await api.post<AssistantResponse>('/assistant/ask', input, { signal });
+  return data;
 }
 
 export async function getAssistantSession(sessionId: string) {
-  return { sessionId, messages: [] as AssistantSessionMessage[] };
+  const { data } = await api.get<{ sessionId: string; messages: AssistantSessionMessage[] }>(
+    `/assistant/sessions/${encodeURIComponent(sessionId)}`,
+  );
+  return data;
 }
 
-export async function deleteAssistantSession(_sessionId: string) {
-  return undefined;
+export async function deleteAssistantSession(sessionId: string) {
+  await api.delete(`/assistant/sessions/${encodeURIComponent(sessionId)}`);
 }
 
-export async function submitAssistantFeedback(_input: {
+export async function submitAssistantFeedback(input: {
   type: AssistantFeedbackType;
   sessionId?: string | null;
   originalRequest?: string;
@@ -127,23 +123,18 @@ export async function submitAssistantFeedback(_input: {
   correction?: string;
   expectedBehaviour?: string;
 }) {
-  return {
-    success: false,
-    feedback: { id: '', type: '', status: 'rejected' },
-  };
+  const { data } = await api.post<{
+    success: boolean;
+    feedback: { id: string; type: string; status: string };
+  }>('/assistant/feedback', input);
+  return data;
 }
 
-export async function listAssistantFeedback(_status?: string) {
-  return {
-    success: true,
-    summary: {
-      total: 0,
-      pending: 0,
-      approved: 0,
-      rejected: 0,
-      repeatedErrors: [],
-    } satisfies AssistantFeedbackSummary,
-    items: [] as Array<{
+export async function listAssistantFeedback(status?: string) {
+  const { data } = await api.get<{
+    success: boolean;
+    summary: AssistantFeedbackSummary;
+    items: Array<{
       id: string;
       type: string;
       status: string;
@@ -152,13 +143,15 @@ export async function listAssistantFeedback(_status?: string) {
       correction: string;
       expectedBehaviour: string;
       createdAt: string;
-    }>,
-  };
+    }>;
+  }>('/assistant/feedback', { params: status ? { status } : undefined });
+  return data;
 }
 
 export async function reviewAssistantFeedback(
-  _id: string,
-  _body: { status: 'approved' | 'rejected'; reviewNote?: string },
+  id: string,
+  body: { status: 'approved' | 'rejected'; reviewNote?: string },
 ) {
-  return { success: false };
+  const { data } = await api.patch<{ success: boolean }>(`/assistant/feedback/${encodeURIComponent(id)}`, body);
+  return data;
 }
