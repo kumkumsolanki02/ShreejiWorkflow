@@ -175,7 +175,7 @@ function MasterDataFormDialog({ isOpen, type, item, isSaving, error, onClose, on
 									</Text>
 									<Text mb={3} fontSize="xs" color="slate.500">
 										Leave a box blank if this skill has no rate there.
-										{item ? ' When you change a salary, the current rates are kept in the history with today as their end date, and the new rates start today.' : ''}
+										{item ? ' When you change a salary, the current rates are kept in the history ending today, and the new rates apply from today on every attendance day and invoice — including several changes in the same month.' : ''}
 										{item?.usageCount ? ' Employees with this skill are updated to the new rates.' : ''}
 									</Text>
 									{isLoadingDesignations ? (

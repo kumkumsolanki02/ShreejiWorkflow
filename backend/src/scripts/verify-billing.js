@@ -69,11 +69,24 @@ async function verifyLocationMonth({ user, organization, location, month, skills
   const expected = new Map(employees.map((employee) => {
     const days = records.filter((record) => String(record.employeeId) === String(employee._id) && new Date(`${record.date}T00:00:00Z`).getUTCDay() !== 0);
     const count = (status) => days.filter((record) => record.status === status).length;
+    const paidValue = (status) => ({ present: 1, half_day: 0.5, paid_leave: 1 }[status] || 0);
     const paidDays = Math.min(26, count('present') + count('half_day') * 0.5 + count('paid_leave'));
     const skill = skills.get(String(employee.skillCategory || '').trim().toLowerCase());
     const todayPrice = skill && priceOn(skill, organization.governmentType, organization.area, '9999-12-31');
-    const thenPrice = skill && priceOn(skill, organization.governmentType, organization.area, toDate);
-    const daily = skill && Number(employee.basicPay) === todayPrice ? r2(employee.dailySalary - todayPrice + thenPrice) : employee.dailySalary;
+    let wageSum = 0;
+    let valueSum = 0;
+    for (const record of days) {
+      const value = paidValue(record.status);
+      if (value <= 0) continue;
+      const thenPrice = skill && priceOn(skill, organization.governmentType, organization.area, record.date);
+      const dayWage = skill && todayPrice != null && thenPrice != null && Number(employee.basicPay) === todayPrice
+        ? r2(employee.dailySalary - todayPrice + thenPrice)
+        : employee.dailySalary;
+      wageSum += dayWage * value;
+      valueSum += value;
+    }
+    const gross = valueSum > 0 && paidDays > 0 ? wageSum * (paidDays / valueSum) : 0;
+    const daily = paidDays > 0 ? r2(gross / paidDays) : employee.dailySalary;
     return [String(employee._id), { employee, paidDays, present: count('present'), absent: count('absent'), daily }];
   }));
 

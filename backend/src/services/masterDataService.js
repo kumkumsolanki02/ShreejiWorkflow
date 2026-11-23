@@ -219,12 +219,14 @@ function rateSignature(rates) {
 /**
  * Archives the current salaries of a category of skill, ending on the day they were changed (or on the new
  * start date when the admin set one), and starts the new rates today unless the admin edited the dates.
+ * Every rate change is kept in history — including several updates on the same day — so invoices can still
+ * show each change later. A period that ends before it starts never covered any day and is skipped.
  */
 function archiveRates(item, dateRange, datesEdited, timeZone) {
 	const today = todayIn(timeZone);
 	const effectiveTo = datesEdited && dateRange.effectiveFrom ? dateRange.effectiveFrom : today;
-	// Rates replaced from a date on or before their own start never applied, so they are not kept as a period.
-	const neverApplied = item.effectiveFrom && effectiveTo <= item.effectiveFrom;
+	// Rates replaced from a date before their own start never covered any day; same-day replacements are kept.
+	const neverApplied = item.effectiveFrom && effectiveTo < item.effectiveFrom;
 	if (item.rates?.length && !neverApplied) {
 		item.rateHistory = [
 			...(item.rateHistory || []),

@@ -578,7 +578,7 @@ function attendanceSummary(lines, monthDays) {
   return { categories, totalManDays, employees: lines.map(employeeBreakdown) };
 }
 
-/** Daily wage is the one valid in the invoice month, so the salary matches the labour rate billed. */
+/** Daily wage is the man-day-weighted skill price across attendance days in the invoice month. */
 function employeeBreakdown(line) {
   return {
     employeeId: line.employeeId,
