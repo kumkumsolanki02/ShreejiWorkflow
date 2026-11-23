@@ -59,9 +59,16 @@ assert(applySttFixes('kitne deactive organisations').toLowerCase().includes('ina
 assert(!applySttFixes('active locations').toLowerCase().includes('activee'), 'stt active not activee');
 assert(!applySttFixes('invoice do').toLowerCase().includes('invoicee'), 'stt invoice not invoicee');
 assert(applySttFixes('invoicee do').toLowerCase().includes('invoice'), 'stt invoicee→invoice');
+assert(applySttFixes('tv a location').toLowerCase().includes('tva'), 'stt tv a→tva');
+assert(applySttFixes('is mahine ka payroll').toLowerCase().includes('this month'), 'stt is mahine→this month');
+assert(applySttFixes('sabhi employee').toLowerCase().includes('all'), 'stt sabhi→all');
+assert(applySttFixes('hajri laga do').toLowerCase().includes('attendance'), 'stt hajri→attendance');
 assert(applySttFixes('नवम्बर का bank invoice').toLowerCase().includes('november'), 'stt november');
 assert(applySttFixes('emplyee list').toLowerCase().includes('employee'), 'stt employee typo');
 assert(applySttFixes('loaction details').toLowerCase().includes('location'), 'stt location typo');
+assert(applySttFixes('turning location').toLowerCase().includes('tony'), 'stt turning→tony');
+assert(applySttFixes('turn my location').toLowerCase().includes('tony'), 'stt turn my→tony');
+assert(applySttFixes('toni location').toLowerCase().includes('tony'), 'stt toni→tony');
 
 const nov = normalizeText('November 2024 का payroll दो');
 assert(extractMonth(nov.text) === '2024-11', 'extract november 2024');
@@ -184,6 +191,15 @@ timed('intent batch', () => {
     ['Tata DB location ka is manth ka invoice do', 'client_invoice'],
     ['Tata DB location ka December Ka Mujhe invoice do', 'client_invoice'],
     ['Tata DB ka invoice do', 'client_invoice'],
+    // Tony / turning transcript regressions
+    ['Tony location ki details do jismein petrol bhi ho', 'get_location_full'],
+    ['Tony location ki veg sheet do', 'wage_register'],
+    ['turning location ki Bank invoice do', 'bank_invoice'],
+    ['Tony location ki Bank invoice do', 'bank_invoice'],
+    ['turn my location ke andar employ ki details do', 'list_employees'],
+    ['Tony location ki mujhe attendance details do', 'get_attendance'],
+    ['Tony location ke andar ki attendance detail do', 'get_attendance'],
+    ['Tony location ke andar ki mujhe attendance sheet do', 'attendance_register'],
   ];
   for (const [text, expected] of cases) {
     const normalized = normalizeText(text);

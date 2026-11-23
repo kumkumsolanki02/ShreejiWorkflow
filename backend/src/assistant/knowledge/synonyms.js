@@ -14,7 +14,8 @@ const INTENTS = [
     phrases: [
       'help', 'मदद', 'हेल्प', 'क्या कर सकते', 'what can you', 'commands', 'assist', 'menu',
       'kya kar sakte', 'kya kya kar sakte', 'tum kya kya', 'aap kya kar',
-      'क्या क्या कर सकते', 'how to use', 'options', 'features',
+      'क्या क्या कर सकते', 'how to use', 'options', 'features', 'kya kya ho sakta',
+      'batao kya kar sakte', 'your features',
     ],
   },
   {
@@ -154,6 +155,8 @@ const INTENTS = [
       'month ki absent', 'month ki present', 'sare employee',
       'absent laga do', 'present laga do', 'haazri laga', 'hajri mark',
       'october ki absent', 'november ki present', 'sare employ ki attendance',
+      'sabko present', 'sabko absent', 'attendance bhar do', 'attendance dal do',
+      'location ki haazri', 'employees ki haazri laga do', 'sari attendance present',
     ],
   },
   {
@@ -247,6 +250,8 @@ const INTENTS = [
       'client bill', 'organization invoice', 'invoice generate', 'बिल निकालो',
       'client का invoice', 'location का invoice', 'invoice बनाओ',
       'invoice do', 'november ka invoice', 'month ka invoice', 'location ka invoice',
+      'client ka bill', 'location ka bill', 'invoice banao', 'invoice nikalo',
+      'is month ka invoice', 'this month invoice', 'invoice download',
     ],
   },
   {

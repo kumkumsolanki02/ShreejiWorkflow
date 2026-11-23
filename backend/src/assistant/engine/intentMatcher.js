@@ -115,10 +115,16 @@ function matchIntent(text, context = {}) {
       };
     }
 
-    // Document cues beat bare location/org details
+    // "location details … petrol bhi" = details primary, document is secondary — keep details
+    const detailsPrimary = /\b(?:details?|जानकारी|पूरी)\b/i.test(normalized)
+      && /\b(?:location|लोकेशन|organization|org)\b/i.test(normalized);
+    const secondaryDocOnly = /\b(?:bhi|भी|also|with|jismein|जिसमें)\b/i.test(normalized);
+
+    // Document cues beat bare location/org details (unless details are clearly primary)
     if (
       hasDocumentCue(normalized)
       && ['lookup_entity', 'get_location_full', 'get_org_full', 'get_employee_full', 'list_employees'].includes(patterned.intent)
+      && !(detailsPrimary && secondaryDocOnly)
     ) {
       const docIntent = containsPhrase(normalized, 'salary slip') || containsPhrase(normalized, 'payslip')
         ? 'salary_slip'
@@ -140,6 +146,21 @@ function matchIntent(text, context = {}) {
         outputMode: null,
         capturedName: null,
         ranked: [{ id: docIntent, score: 999, hits: 1 }],
+      };
+    }
+
+    // "Tony location ki attendance details" must not become employee_attendance
+    if (
+      patterned.intent === 'employee_attendance'
+      && (/\blocation\b|लोकेशन|ke\s*andar|के\s*अंदर/i.test(normalized))
+    ) {
+      return {
+        intent: 'get_attendance',
+        confidence: 0.95,
+        fields: [],
+        outputMode: null,
+        capturedName: null,
+        ranked: [{ id: 'get_attendance', score: 999, hits: 1 }],
       };
     }
 

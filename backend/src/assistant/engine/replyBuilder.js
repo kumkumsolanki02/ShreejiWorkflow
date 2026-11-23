@@ -3,19 +3,33 @@ function helpReply(language = 'hi-IN') {
     return [
       'मैं Admin Assistant हूँ (बिना external AI के)। आप मुझसे पूछ / करवा सकते हैं:',
       '• Organization / Location / Employee की field या full details',
-      '• Active employees की list या count',
-      '• Attendance देखना या mark करना (confirm के बाद)',
-      '• Payroll, salary slip, wage register, bank invoice, client invoice',
-      'उदाहरण: "Lokesh का mobile दो", "Pirana location की attendance present लगा दो", "November का payroll दो"',
+      '• Dashboard: kitni active/inactive organizations या locations',
+      '• Active employees की list या count (location / org scoped)',
+      '• Attendance देखना या mark करना — दिन या पूरे month (confirm के बाद)',
+      '• Payroll, salary slip, wage register/sheet, attendance register',
+      '• Bank invoice / NEFT letter, client invoice (location + month)',
+      'उदाहरण:',
+      '  - "Lokesh का mobile दो"',
+      '  - "Madanganj location की November attendance present लगा दो"',
+      '  - "Tata DB location का invoice दो"',
+      '  - "Mere dashboard ke andar kitni active locations hai"',
+      'Confirm/Cancel लिखकर pending action पूरा करें।',
     ].join('\n');
   }
   return [
     'I am the Admin Assistant (no external AI). I can:',
     '• Answer org / location / employee field or full details',
-    '• List or count active employees',
-    '• Show or mark attendance (after confirmation)',
-    '• Prepare payroll, salary slips, wage register, bank invoice, client invoice',
-    'Examples: "Give Lokesh mobile", "Mark present for Pirana location", "Payroll for November"',
+    '• Dashboard counts: active/inactive organizations or locations',
+    '• List or count employees (by location or organization)',
+    '• Show or mark attendance — day or full month (after confirm)',
+    '• Payroll, salary slip, wage register/sheet, attendance register',
+    '• Bank invoice / NEFT letter, client invoice (location + month)',
+    'Examples:',
+    '  - "Give Lokesh mobile"',
+    '  - "Mark November present for Madanganj location"',
+    '  - "Invoice for Tata DB location"',
+    '  - "How many active locations on my dashboard"',
+    'Type Confirm/Cancel to finish a pending action.',
   ].join('\n');
 }
 

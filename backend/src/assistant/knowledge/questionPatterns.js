@@ -10,20 +10,22 @@ const ASK = String.raw`(?:दो|दे|देना|दे\s*दो|दे\s*�
 const NAME = String.raw`([\p{L}][\p{L}\p{N}.'\-\s]{1,48}?)`;
 
 const RESERVED_NAMES = new Set([
-  'organization', 'organisation', 'org', 'company', 'कंपनी', 'संगठन',
-  'location', 'site', 'लोकेशन', 'साइट',
+  'organization', 'organisation', 'org', 'orgs', 'company', 'कंपनी', 'संगठन',
+  'location', 'locations', 'site', 'sites', 'लोकेशन', 'साइट',
   'employee', 'employees', 'employeee', 'कर्मचारी', 'staff', 'worker', 'workers',
   'attendance', 'payroll', 'petrol', 'patrol', 'invoice', 'salary', 'wage', 'bedsheet',
-  'slip', 'register', 'sheet', 'neft', 'this', 'that', 'आज', 'today',
+  'slip', 'register', 'sheet', 'neft', 'bill', 'बिल', 'this', 'that', 'आज', 'today',
   'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
   'september', 'october', 'november', 'december', 'month', 'maan', 'mahina',
-  'active', 'all', 'सभी', 'सारे', 'month', 'महीने', 'इस', 'उस', 'इसी', 'उसी',
-  'the', 'a', 'an', 'my', 'me',
+  'active', 'inactive', 'deactive', 'all', 'सभी', 'सारे', 'महीने', 'इस', 'उस', 'इसी', 'उसी',
+  'the', 'a', 'an', 'my', 'me', 'mere', 'meri', 'iska', 'uska',
   'mobile', 'phone', 'email', 'mail', 'address', 'adress', 'bank', 'ifsc', 'uan',
-  'details', 'detail', 'information', 'info', 'data', 'profile', 'जानकारी',
-  'number', 'count', 'list', 'full', 'complete', 'पूरी', 'सारी',
-  'tum', 'aap', 'you', 'kya', 'kar', 'sakte', 'ho', 'help', 'madad',
-  'dashboard', 'active', 'inactive', 'deactive', 'mere', 'my',
+  'details', 'detail', 'information', 'info', 'profile', 'जानकारी',
+  'number', 'count', 'list', 'full', 'complete', 'पूरी', 'सारी', 'summary', 'report',
+  'tum', 'aap', 'you', 'kya', 'kar', 'sakte', 'ho', 'hai', 'hain', 'help', 'madad',
+  'dashboard', 'please', 'krpya', 'mujhe', 'do', 'de', 'chahie', 'चाहिए',
+  'present', 'absent', 'mark', 'maar', 'pdf', 'excel', 'download', 'generate',
+  'confirm', 'cancel', 'yes', 'no', 'ok', 'okay', 'haan', 'nahi',
 ]);
 
 function isReservedName(value) {
@@ -53,12 +55,12 @@ const QUESTION_PATTERNS = [
     entity: null,
     outputMode: null,
     patterns: [
-      /^(?:help|मदद|हेल्प|commands?|menu)$/iu,
+      /^(?:help|मदद|हेल्प|commands?|menu|options?)$/iu,
       /(?:क्या\s+कर\s+सकते|what\s+can\s+you|how\s+to\s+use)/iu,
-      // Hinglish: "tum kya kya kar sakte ho", "aap kya kar sakte ho"
       /(?:tum|aap|you)?\s*kya\s+(?:kya\s+)?kar\s+sakte/iu,
       /kya\s+kya\s+(?:kar\s+)?(?:sakte|karo|ho)/iu,
-      /(?:capabilities|features|functions)\b/iu,
+      /(?:capabilities|features|functions|kya\s+kya\s+ho\s+sakta)\b/iu,
+      /(?:mujhe\s+)?(?:batao|बताओ)\s+(?:kya|क्या)\s+(?:kar|कर)/iu,
     ],
   },
   {
@@ -67,8 +69,9 @@ const QUESTION_PATTERNS = [
     entity: null,
     outputMode: null,
     patterns: [
-      /^(?:confirm|yes|yeah|yep|ok|okay|haan|haa|हाँ|हां|जी|सही|कर\s*दो|kar\s*do|go\s*ahead|proceed)$/iu,
+      /^(?:confirm|yes|yeah|yep|yup|ok|okay|haan|haa|हाँ|हां|जी|सही|कर\s*दो|kar\s*do|go\s*ahead|proceed|done|thik\s*hai|ठीक\s*है|bilkul|बिल्कुल)$/iu,
       /^(?:please\s+)?(?:confirm|हाँ|हां)\s*(?:karo|करो|do)?$/iu,
+      /^(?:haa[n]?|haan\s*ji|yes\s*ji)$/iu,
     ],
   },
   {
@@ -77,7 +80,7 @@ const QUESTION_PATTERNS = [
     entity: null,
     outputMode: null,
     patterns: [
-      /^(?:cancel|रद्द|कैंसल|mat\s+karo|don't|do\s+not|no|nahi|नहीं|ना|cancel\s*karo|रद्द\s*करो)$/iu,
+      /^(?:cancel|रद्द|कैंसल|mat\s+karo|don't|do\s+not|no|nahi|नहीं|ना|cancel\s*karo|रद्द\s*करो|mat\s*do|rehne\s*do|छोड़\s*दो)$/iu,
     ],
   },
   {
@@ -96,6 +99,8 @@ const QUESTION_PATTERNS = [
       /(?:month|महीने|manth|january|february|march|april|may|june|july|august|september|october|november|december).{0,40}(?:present|absent|प्रेजेंट|अबसेंट).{0,40}(?:लगा|laga|mark|maar|कर\s*दो|कर\s*दे)/iu,
       /(?:location|लोकेशन).{0,80}(?:employee|employees|कर्मचारी).{0,60}(?:present|absent|प्रेजेंट|अबसेंट)/iu,
       /(?:present|absent|प्रेजेंट|अबसेंट).{0,50}(?:employee|employees|कर्मचारी|sare|all|सभी|सारे)/iu,
+      /(?:haazri|hajri|हाजरी).{0,40}(?:लगा|laga|mark|maar|कर\s*दो)/iu,
+      /(?:sabko|sabhi|सभी\s*को).{0,30}(?:present|absent|p\b|a\b)/iu,
     ],
   },
   {
@@ -249,12 +254,15 @@ const QUESTION_PATTERNS = [
     confidence: 0.95,
     entity: 'location',
     outputMode: null,
+    // Require a clear ask — bare "petrol bhi" inside location-details must NOT win
     patterns: [
-      /(?:payroll|पेरोल|pay\s*roll|petrol|patrol)(?:\s*(?:दो|दे|बताओ|दिखाओ|details|जानकारी|report|निकालो|generate))?/iu,
+      /(?:payroll|पेरोल|pay\s*roll|petrol|patrol)\s*(?:दो|दे|do|बताओ|दिखाओ|report|निकालो|generate|चाहिए|chahie|download)/iu,
+      /(?:ka|ki|ke|का|की)\s+(?:payroll|पेरोल|petrol|patrol)\s*(?:दो|दे|do|बताओ|निकालो|चाहिए|chahie)?/iu,
       /(?:इस\s*महीने|this\s*month|current\s*month).{0,25}(?:payroll|पेरोल|petrol|patrol)/iu,
-      /(?:organization|org|कंपनी|के\s*अंदर|ke\s*andar|location|लोकेशन).{0,50}(?:payroll|पेरोल|petrol|patrol)/iu,
+      /(?:organization|org|कंपनी).{0,40}(?:के\s*अंदर|ke\s*andar).{0,40}(?:payroll|पेरोल|petrol|patrol)/iu,
+      /(?:location|लोकेशन).{0,40}(?:ka|ki|ke|का|की)?\s*(?:payroll|पेरोल|petrol|patrol)\s*(?:दो|दे|do|बताओ|निकालो|चाहिए|chahie)/iu,
       /(?:सभी|सारी|all).{0,25}(?:location|लोकेशन).{0,30}(?:payroll|पेरोल|petrol|patrol)/iu,
-      /(?:january|february|march|april|may|june|july|august|september|october|november|december|आक्ट[ोो]बर|नव[म्म]्बर|सितंबर|इस\s*महीने|current\s*month).{0,40}(?:payroll|पेरोल|petrol|patrol)/iu,
+      /(?:january|february|march|april|may|june|july|august|september|october|november|december|आक्ट[ोो]बर|नव[म्म]्बर|सितंबर|इस\s*महीने|current\s*month).{0,40}(?:payroll|पेरोल|petrol|patrol)\s*(?:दो|दे|do|बताओ|निकालो|चाहिए|chahie)?/iu,
     ],
   },
   {
@@ -270,10 +278,12 @@ const QUESTION_PATTERNS = [
   },
   {
     intent: 'employee_attendance',
-    confidence: 0.94,
+    confidence: 0.95,
     entity: 'employee',
     outputMode: null,
     requireRealName: true,
+    // Named person attendance — before site get_attendance; never steal "X location … attendance"
+    forbid: ['location', 'locations', 'लोकेशन', 'ke andar', 'के अंदर', 'site', 'andar'],
     patterns: [
       new RegExp(`${NAME}\\s+(?:की|का|के|ki|ka|'s)\\s+(?:attendance|अटेंडेंस|हाजरी)\\s*${ASK}`, 'iu'),
       new RegExp(`(?:attendance|अटेंडेंस)\\s+(?:of|for)\\s+${NAME}`, 'iu'),
@@ -281,13 +291,16 @@ const QUESTION_PATTERNS = [
   },
   {
     intent: 'get_attendance',
-    confidence: 0.9,
+    confidence: 0.94,
     entity: 'location',
     outputMode: null,
+    forbid: ['register', 'sheet', 'mark', 'maar', 'present', 'absent', 'लगा'],
     patterns: [
       /(?:आज|today|aaj).{0,20}(?:attendance|अटेंडेंस|हाजरी)/iu,
-      /(?:attendance|अटेंडेंस)\s*(?:summary|status|की\s*जानकारी|बताओ|दिखाओ|दो|report|check)/iu,
+      /(?:attendance|अटेंडेंस)\s*(?:summary|status|details?|detail|की\s*जानकारी|report|check)/iu,
       /(?:show|give|tell).{0,20}(?:attendance|अटेंडेंस)/iu,
+      /(?:location|लोकेशन).{0,50}(?:attendance|अटेंडेंस|हाजरी)\s*(?:details?|detail|summary|जानकारी|दो|दे|बताओ|दिखाओ)?/iu,
+      /(?:ke\s*andar|के\s*अंदर).{0,40}(?:attendance|अटेंडेंस|हाजरी)\s*(?:details?|detail|summary|जानकारी|दो|दे)?/iu,
       /(?:organization|org|कंपनी).{0,50}(?:attendance|अटेंडेंस)\s*(?:दो|दे|बताओ|summary|pdf|excel)?/iu,
       /(?:सभी|सारी|all).{0,25}(?:location|लोकेशन).{0,30}(?:attendance|अटेंडेंस)/iu,
     ],
@@ -317,12 +330,13 @@ const QUESTION_PATTERNS = [
     confidence: 0.94,
     entity: 'location',
     outputMode: 'full',
-    // Avoid matching "… jitni bhi location … employees/payroll"
-    forbid: ['employee', 'employees', 'कर्मचारी', 'payroll', 'पेरोल', 'salary', 'attendance', 'list', 'kitne', 'kitni', 'kitna', 'कितने', 'कितनी', 'कितना'],
+    // Do NOT forbid payroll/petrol — "details … petrol bhi" is still location details
+    // (document override + payroll ask-patterns handle real payroll asks)
+    forbid: ['employee', 'employees', 'कर्मचारी', 'salary', 'attendance', 'list', 'kitne', 'kitni', 'kitna', 'कितने', 'कितनी', 'कितना'],
     patterns: [
-      /(?:location|लोकेशन|site)\s*(?:की|का)?\s*(?:पूरी|सारी|full|complete)?\s*(?:details?|जानकारी|information|info)/iu,
-      new RegExp(`${NAME}\\s+(?:location|लोकेशन|site)\\s*(?:की|का)?\\s*(?:पूरी|सारी|full|complete)\\s*(?:details?|जानकारी|information)?\\s*${ASK}`, 'iu'),
-      new RegExp(`${NAME}\\s+(?:location|लोकेशन|site)\\s*(?:की|का)\\s*(?:details?|जानकारी|information)\\s*${ASK}`, 'iu'),
+      /(?:location|लोकेशन|site)\s*(?:की|का|के|ki|ka|ke)?\s*(?:पूरी|सारी|full|complete)?\s*(?:details?|जानकारी|information|info)/iu,
+      new RegExp(`${NAME}\\s+(?:location|लोकेशन|site)\\s*(?:की|का|के|ki|ka|ke)?\\s*(?:पूरी|सारी|full|complete)\\s*(?:details?|जानकारी|information)?\\s*${ASK}`, 'iu'),
+      new RegExp(`${NAME}\\s+(?:location|लोकेशन|site)\\s*(?:की|का|के|ki|ka|ke)\\s*(?:details?|जानकारी|information)\\s*${ASK}`, 'iu'),
     ],
   },
   {
