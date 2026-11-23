@@ -41,6 +41,24 @@ function timed(label, fn, maxMs = 500) {
 
 assert(applySttFixes('अटेंडेंस लगा दो').toLowerCase().includes('attendance'), 'stt attendance');
 assert(applySttFixes('पेरोल दो').toLowerCase().includes('payroll'), 'stt payroll');
+assert(applySttFixes('madanganj ka petrol do').toLowerCase().includes('payroll'), 'stt petrol→payroll');
+assert(applySttFixes('january ka bedsheet do').toLowerCase().includes('wage sheet'), 'stt bedsheet→wage sheet');
+assert(applySttFixes('january ka wedge sheet do').toLowerCase().includes('wage sheet'), 'stt wedge sheet→wage sheet');
+assert(applySttFixes('celery slip do').toLowerCase().includes('salary slip'), 'stt celery slip→salary slip');
+assert(applySttFixes('bank later do').toLowerCase().includes('bank invoice'), 'stt bank later→bank invoice');
+assert(applySttFixes('october manth ki absant maar kar do').toLowerCase().includes('month'), 'stt manth→month');
+assert(applySttFixes('october manth ki absant maar kar do').toLowerCase().includes('absent'), 'stt absant→absent');
+assert(applySttFixes('october manth ki absant maar kar do').toLowerCase().includes('mark'), 'stt maar→mark');
+assert(applySttFixes('pay role do').toLowerCase().includes('payroll'), 'stt pay role→payroll');
+assert(applySttFixes('madan ganj location').toLowerCase().includes('madanganj'), 'stt madan ganj→madanganj');
+assert(applySttFixes('form 17 do').toLowerCase().includes('wage register'), 'stt form 17→wage register');
+assert(applySttFixes('pay sleep do').toLowerCase().includes('salary slip'), 'stt pay sleep→salary slip');
+assert(applySttFixes('nikalo payroll').toLowerCase().includes('निकालो'), 'stt nikalo');
+assert(applySttFixes('this month ka petrol').toLowerCase().includes('payroll'), 'stt this month petrol');
+assert(applySttFixes('kitne deactive organisations').toLowerCase().includes('inactive'), 'stt deactive→inactive');
+assert(!applySttFixes('active locations').toLowerCase().includes('activee'), 'stt active not activee');
+assert(!applySttFixes('invoice do').toLowerCase().includes('invoicee'), 'stt invoice not invoicee');
+assert(applySttFixes('invoicee do').toLowerCase().includes('invoice'), 'stt invoicee→invoice');
 assert(applySttFixes('नवम्बर का bank invoice').toLowerCase().includes('november'), 'stt november');
 assert(applySttFixes('emplyee list').toLowerCase().includes('employee'), 'stt employee typo');
 assert(applySttFixes('loaction details').toLowerCase().includes('location'), 'stt location typo');
@@ -115,6 +133,8 @@ timed('intent batch', () => {
     ['client invoice दो', 'client_invoice'],
     ['Lokesh का salary कितना है', 'salary_amount'],
     ['help', 'help'],
+    ['tum kya kya kar sakte ho', 'help'],
+    ['aap kya kar sakte ho', 'help'],
     ['hi i am lokesh', 'greeting'],
     ['नमस्ते', 'greeting'],
     ['Amit Chaudhari ka mobile number do', 'get_employee_field'],
@@ -145,6 +165,25 @@ timed('intent batch', () => {
     ['cancel', 'cancel'],
     ['Loki location ke andar jitne bhi employ Hai unke October manth ki absent Maar kar do Sare employee ki', 'mark_attendance'],
     ['Loki location ke andar jitne bhi employ Hai Unki October manth ki absent Maar kar do Sare employ ki', 'mark_attendance'],
+    ['madanganj Ka Mujhe November ka petrol do', 'payroll'],
+    ['September Ka Mujhe madanganj location ka petrol do', 'payroll'],
+    ['September month Ka Mujhe madanganj location ka petrol do', 'payroll'],
+    ['madanganj location Ka Mujhe January ka bedsheet do', 'wage_register'],
+    ['madanganj location Ka Mujhe January ka wedge sheet do', 'wage_register'],
+    ['madanganj location Ka Mujhe January ka celery slip do', 'salary_slip'],
+    ['madanganj location Ka Mujhe November ka bank later do', 'bank_invoice'],
+    ['madanganj location Ka Mujhe January ka attendance sheet do', 'attendance_register'],
+    ['Mere dashboard ke andar Kitni active locations hai', 'count_locations'],
+    ['Mere dashboard ke andar Kitni locations hai', 'count_locations'],
+    ['Mere dashboard ke andar Kitni organisations hai', 'count_organizations'],
+    ['Mere dashboard ke andar Kitni active organisation', 'count_organizations'],
+    ['kitne deactive organisations hai', 'count_organizations'],
+    ['Kitni deactive locations hai', 'count_locations'],
+    ['Tata DB location ka invoice 2 November ka', 'client_invoice'],
+    ['Tata DB location Ka Mujhe invoice do', 'client_invoice'],
+    ['Tata DB location ka is manth ka invoice do', 'client_invoice'],
+    ['Tata DB location ka December Ka Mujhe invoice do', 'client_invoice'],
+    ['Tata DB ka invoice do', 'client_invoice'],
   ];
   for (const [text, expected] of cases) {
     const normalized = normalizeText(text);

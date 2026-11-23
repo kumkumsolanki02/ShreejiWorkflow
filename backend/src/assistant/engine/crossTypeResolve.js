@@ -80,7 +80,7 @@ function decideSearchTypes(text, intent = null, fields = []) {
   // Org-scoped actions: prefer organization (+ location) over person false-hits
   const orgActions = new Set([
     'payroll', 'salary_slip', 'wage_register', 'attendance_register', 'bank_invoice',
-    'payroll_run', 'client_invoice', 'list_employees', 'count_employees', 'count_locations',
+    'payroll_run', 'client_invoice', 'list_employees', 'count_employees', 'count_locations', 'count_organizations',
     'get_attendance', 'mark_attendance', 'edit_attendance', 'salary_amount',
   ]);
   if (orgActions.has(intent)) {

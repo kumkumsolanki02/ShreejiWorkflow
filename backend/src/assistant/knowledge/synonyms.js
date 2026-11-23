@@ -13,6 +13,7 @@ const INTENTS = [
     weight: 1,
     phrases: [
       'help', 'मदद', 'हेल्प', 'क्या कर सकते', 'what can you', 'commands', 'assist', 'menu',
+      'kya kar sakte', 'kya kya kar sakte', 'tum kya kya', 'aap kya kar',
       'क्या क्या कर सकते', 'how to use', 'options', 'features',
     ],
   },
@@ -22,6 +23,16 @@ const INTENTS = [
     phrases: ['cancel', 'रद्द', 'मत करो', "don't", 'do not', 'कैंसल', 'cancel karo', 'रद्द करो'],
   },
   {
+    id: 'count_organizations',
+    weight: 5,
+    phrases: [
+      'kitne organizations', 'kitni organisations', 'kitne organisations', 'kitni organizations',
+      'कितने organization', 'कितनी organizations', 'how many organizations', 'organization count',
+      'active organizations', 'inactive organizations', 'deactive organizations',
+      'dashboard organizations', 'kitne orgs', 'kitni orgs', 'कितनी कंपनी',
+    ],
+  },
+  {
     id: 'count_locations',
     weight: 5,
     phrases: [
@@ -29,6 +40,7 @@ const INTENTS = [
       'how many locations', 'location count', 'locations कितने', 'locations kitne', 'locations kitni',
       'kitne sites', 'kitni sites', 'organization में कितने location', 'ke andar kitne locations',
       'ke andar kitni locations', 'organization ke andar kitni', 'org ke andar kitne',
+      'dashboard locations', 'active locations', 'inactive locations', 'deactive locations',
     ],
   },
   {
@@ -140,6 +152,8 @@ const INTENTS = [
       'absent कर दो', 'location की attendance', 'employees की attendance लगा',
       'absent mark', 'absent maar', 'present mark', 'present maar', 'maar kar do', 'mark kar do',
       'month ki absent', 'month ki present', 'sare employee',
+      'absent laga do', 'present laga do', 'haazri laga', 'hajri mark',
+      'october ki absent', 'november ki present', 'sare employ ki attendance',
     ],
   },
   {
@@ -175,6 +189,7 @@ const INTENTS = [
     phrases: [
       'salary slip', 'सैलरी स्लिप', 'pay slip', 'payslip', 'salary slips',
       'salary slip दो', 'सैलरी स्लिप दो', 'pay slip दो', 'slip दो',
+      'celery slip', 'salary sleep', 'location ka salary slip',
     ],
   },
   {
@@ -186,6 +201,8 @@ const INTENTS = [
       'पेरोल दो', 'पेरोल बताओ', 'payroll निकालो', 'payroll generate',
       'सभी locations का payroll', 'सारी locations का पेरोल', 'organization का payroll',
       'org का payroll', 'all locations payroll', 'october का payroll',
+      'petrol', 'petrol do', 'patrol', 'september ka petrol', 'november ka petrol',
+      'january ka payroll', 'pay role', 'pay royal', 'location ka payroll',
     ],
   },
   {
@@ -194,6 +211,8 @@ const INTENTS = [
     phrases: [
       'wage register', 'वेज रजिस्टर', 'form xvii', 'wage sheet', 'wage register दो',
       'वेज रजिस्टर दो', 'सभी locations का wage register',
+      'bedsheet', 'wedge sheet', 'january ka wage sheet', 'location ka wage sheet',
+      'wage resister', 'form 17', 'form 17 register',
     ],
   },
   {
@@ -203,6 +222,7 @@ const INTENTS = [
       'attendance register', 'अटेंडेंस रजिस्टर', 'register attendance', 'attendance sheet download',
       'attendance register दो', 'अटेंडेंस रजिस्टर दो', 'attendance sheet',
       'सभी locations का attendance', 'सारी locations की attendance', 'all locations attendance',
+      'location ka attendance register', 'month ka attendance register',
     ],
   },
   {
@@ -211,7 +231,7 @@ const INTENTS = [
     phrases: [
       'bank invoice', 'bank letter', 'बैंक इनवॉइस', 'bank payment letter', 'neft letter',
       'bank invoice दो', 'बैंक लेटर', 'bank payment', 'neft',
-      'सभी locations का bank invoice',
+      'सभी locations का bank invoice', 'location ka bank invoice', 'bank later',
     ],
   },
   {
@@ -226,6 +246,7 @@ const INTENTS = [
       'client invoice', 'invoice दो', 'location invoice', 'बिल दो', 'invoice for',
       'client bill', 'organization invoice', 'invoice generate', 'बिल निकालो',
       'client का invoice', 'location का invoice', 'invoice बनाओ',
+      'invoice do', 'november ka invoice', 'month ka invoice', 'location ka invoice',
     ],
   },
   {
@@ -242,20 +263,21 @@ const INTENTS = [
 const ENTITY_HINTS = {
   organization: [
     'organization', 'organisation', 'org', 'company', 'संगठन', 'कंपनी', 'ऑर्गनाइजेशन',
-    'client org', 'firm',
+    'client org', 'firm', 'कंपनी का', 'org का', 'organisation का',
   ],
   location: [
     'location', 'site', 'लोकेशन', 'साइट', 'work site', 'कार्यस्थल', 'unit', 'plant',
+    'camp', 'gate', 'yard', 'depot', 'location का', 'site का',
   ],
   employee: [
     'employee', 'employees', 'staff', 'कर्मचारी', 'एम्प्लॉई', 'worker', 'workers',
-    'emp', 'person', 'व्यक्ति',
+    'emp', 'person', 'व्यक्ति', 'employ', 'labour', 'labor',
   ],
 };
 
 const STATUS_PHRASES = [
-  { status: 'present', phrases: ['present', 'प्रेजेंट', 'हाजिर', 'p mark', 'mark p', 'haazir', 'hazir'] },
-  { status: 'absent', phrases: ['absent', 'अबसेंट', 'गैरहाजिर', 'a mark', 'mark a', 'non present'] },
+  { status: 'present', phrases: ['present', 'प्रेजेंट', 'हाजिर', 'p mark', 'mark p', 'haazir', 'hazir', 'prasant', 'presant'] },
+  { status: 'absent', phrases: ['absent', 'अबसेंट', 'गैरहाजिर', 'a mark', 'mark a', 'non present', 'absant', 'upsant'] },
   { status: 'half_day', phrases: ['half day', 'half_day', 'हाफ डे', 'hd', 'halfday'] },
   { status: 'leave', phrases: ['leave', 'छुट्टी', 'leave mark'] },
   { status: 'paid_leave', phrases: ['paid leave', 'pl', 'पेड लीव', 'paid leave'] },
@@ -300,6 +322,7 @@ const LIST_WORDS = [
 const NOISE_WORDS = [
   'please', 'pls', 'plz', 'कृपया', 'भाई', 'यार', 'sir', 'ji', 'जी', 'बस', 'only', 'just',
   'can you', 'could you', 'mujhe', 'मुझे', 'mera', 'meri', 'mere',
+  'like', 'basically', 'actually', 'simply', 'bas', 'thoda', 'थोड़ा',
 ];
 
 module.exports = {

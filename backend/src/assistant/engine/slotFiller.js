@@ -26,6 +26,23 @@ function extractStatus(text) {
   return null;
 }
 
+/** active / inactive for org & location counts (not attendance present/absent). */
+function extractEntityStatus(text) {
+  const value = String(text || '').toLowerCase();
+  if (/\b(?:inactive|deactive|deactivated|disabled|इनएक्टिव|डिएक्टिव)\b/.test(value)) return 'inactive';
+  if (/\b(?:active|एक्टिव)\b/.test(value)) return 'active';
+  // Dashboard / bare "kitni locations" → active by default
+  return 'active';
+}
+
+function isDashboardScope(text) {
+  const value = String(text || '').toLowerCase();
+  return /\b(?:dashboard|डैशबोर्ड|mere\s+dashboard|my\s+dashboard|overall|total)\b/.test(value)
+    || /(?:kitne|kitni|कितने|कितनी)\s+(?:active\s+|inactive\s+)?(?:locations?|organizations?|organisations?|orgs?|लोकेशन)/i.test(value)
+      && !/\b(?:organization|organisation|org|कंपनी)\s+\w+/.test(value)
+      && !/(?:ke\s+andar|के\s*अंदर).{0,40}(?:location|organization)/i.test(value);
+}
+
 function extractFormat(text) {
   const value = String(text || '').toLowerCase();
   if (containsPhrase(value, 'excel') || containsPhrase(value, 'xlsx') || containsPhrase(value, 'sheet')) {
@@ -63,6 +80,47 @@ async function fillSlots(text, intentResult, sessionSlots = {}, timeZone = 'Asia
 
   // ── Org-scoped actions: resolve org (+ optional location / all locations) ──
   if (isOrgActionIntent(intent)) {
+    const entityStatus = extractEntityStatus(text);
+    // Global when: org-count, or location-count on dashboard / without "X ke andar …"
+    const globalLocationCount = intent === 'count_locations'
+      && (/\bdashboard\b/i.test(text) || !/(?:ke\s*andar|के\s*अंदर)/i.test(text));
+
+    // Global / dashboard counts — no org required
+    if (intent === 'count_organizations' || globalLocationCount) {
+      return {
+        slots: {
+          organizationId: null,
+          locationId: null,
+          locationIds: null,
+          locationScope: intent === 'count_locations' ? 'dashboard' : null,
+          employeeId: null,
+          month: month || null,
+          date: date || null,
+          status: null,
+          entityStatus,
+          fields,
+          format,
+          outputMode,
+          intent,
+          resolvedType: intent === 'count_organizations' ? 'organization' : 'location',
+          soughtName: null,
+          searchTypes: intent === 'count_organizations' ? ['organization'] : ['location'],
+        },
+        entities: { organization: null, location: null, employee: null },
+        ambiguous: { organizations: [], locations: [], employees: [], crossType: [] },
+        usesContext: false,
+        explicitEmployeeMention: false,
+        explicitLocationMention: intent === 'count_locations',
+        explicitOrganizationMention: intent === 'count_organizations',
+        soughtEmployeeName: null,
+        typeHint: typeHintEarly,
+        searchTypes: intent === 'count_organizations' ? ['organization'] : ['location'],
+        crossStatus: 'exact',
+        defaultDate: currentDateInTimeZone(timeZone),
+        defaultMonth: currentMonthInTimeZone(timeZone),
+      };
+    }
+
     const scoped = await resolveOrgScopedEntities(text, {
       intent,
       capturedName: intentResult.capturedName || null,
@@ -138,13 +196,16 @@ async function fillSlots(text, intentResult, sessionSlots = {}, timeZone = 'Asia
 
     const slots = {
       organizationId: organization?.id || location?.organizationId || null,
-      locationId: locationScope === 'all_in_org' ? null : (location?.id || null),
+      locationId: locationScope === 'all_in_org' || locationScope === 'dashboard' ? null : (location?.id || null),
       locationIds: locationIds.length ? locationIds : null,
       locationScope: locationScope || null,
       employeeId: null,
       month: month || null,
       date: date || null,
       status: status || null,
+      entityStatus: ['count_locations', 'count_organizations', 'list_employees', 'count_employees'].includes(intent)
+        ? entityStatus
+        : null,
       fields,
       format,
       outputMode,
@@ -328,6 +389,8 @@ async function fillSlots(text, intentResult, sessionSlots = {}, timeZone = 'Asia
 module.exports = {
   fillSlots,
   extractStatus,
+  extractEntityStatus,
+  isDashboardScope,
   extractFormat,
   usesContextReference,
   detectTypeHint,

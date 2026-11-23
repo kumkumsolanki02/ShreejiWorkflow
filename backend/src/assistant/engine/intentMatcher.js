@@ -41,7 +41,27 @@ function stripNoise(text) {
 
 function hasActionVerb(text) {
   return hasAny(text, [
-    'लगा', 'mark', 'maar', 'डाल', 'भर', 'कर दो', 'कर दे', 'set', 'update', 'edit', 'change', 'बदल',
+    'लगा', 'लगा दो', 'mark', 'maar', 'डाल', 'डाल दो', 'भर', 'भर दो',
+    'कर दो', 'कर दे', 'set', 'update', 'edit', 'change', 'बदल',
+    'nikalo', 'निकालो', 'banao', 'बनाओ', 'generate', 'download',
+  ]);
+}
+
+function hasDocumentCue(text) {
+  return hasAny(text, [
+    'payroll', 'petrol', 'patrol', 'पेरोल',
+    'wage register', 'wage sheet', 'bedsheet', 'वेज रजिस्टर', 'वेज',
+    'salary slip', 'payslip', 'सैलरी स्लिप',
+    'bank invoice', 'bank letter', 'neft letter', 'neft', 'बैंक इनवॉइस',
+    'attendance register', 'attendance sheet',
+    'client invoice', 'client bill', 'invoicee',
+  ]) || (/\binvoices?\b|\binvoicee\b/i.test(text) && !/\bbank\s*(?:number|account|ac)\b/i.test(text));
+}
+
+function hasStatusCue(text) {
+  return hasAny(text, [
+    'present', 'absent', 'प्रेजेंट', 'अबसेंट', 'half_day', 'leave',
+    'haazir', 'hazir', 'गैरहाजिर',
   ]);
 }
 
@@ -79,6 +99,50 @@ function matchIntent(text, context = {}) {
       };
     }
 
+    // Status + action verb must never fall through to list/lookup
+    if (
+      hasStatusCue(normalized)
+      && hasActionVerb(normalized)
+      && ['list_employees', 'count_employees', 'lookup_entity', 'get_location_full', 'get_org_full', 'get_employee_full'].includes(patterned.intent)
+    ) {
+      return {
+        intent: 'mark_attendance',
+        confidence: 0.96,
+        fields: [],
+        outputMode: null,
+        capturedName: null,
+        ranked: [{ id: 'mark_attendance', score: 999, hits: 1 }],
+      };
+    }
+
+    // Document cues beat bare location/org details
+    if (
+      hasDocumentCue(normalized)
+      && ['lookup_entity', 'get_location_full', 'get_org_full', 'get_employee_full', 'list_employees'].includes(patterned.intent)
+    ) {
+      const docIntent = containsPhrase(normalized, 'salary slip') || containsPhrase(normalized, 'payslip')
+        ? 'salary_slip'
+        : containsPhrase(normalized, 'wage') || containsPhrase(normalized, 'bedsheet') || containsPhrase(normalized, 'form xvii')
+          ? 'wage_register'
+          : containsPhrase(normalized, 'bank invoice') || containsPhrase(normalized, 'neft') || containsPhrase(normalized, 'bank letter')
+            ? 'bank_invoice'
+            : containsPhrase(normalized, 'attendance register') || containsPhrase(normalized, 'attendance sheet')
+              ? 'attendance_register'
+              : containsPhrase(normalized, 'client invoice')
+                || ((containsPhrase(normalized, 'invoice') || containsPhrase(normalized, 'invoicee') || containsPhrase(normalized, 'बिल'))
+                  && !containsPhrase(normalized, 'bank'))
+                ? 'client_invoice'
+                : 'payroll';
+      return {
+        intent: docIntent,
+        confidence: 0.95,
+        fields: [],
+        outputMode: null,
+        capturedName: null,
+        ranked: [{ id: docIntent, score: 999, hits: 1 }],
+      };
+    }
+
     return {
       intent: patterned.intent,
       confidence: patterned.confidence,
@@ -111,18 +175,30 @@ function matchIntent(text, context = {}) {
     if (intent.id === 'get_location_full' && wantsFull && mentionsLocation) score += 16;
     if (intent.id === 'get_location_field' && locationFields.length && mentionsLocation && !wantsFull) score += 10;
 
-    if ((intent.id === 'mark_attendance' || intent.id === 'edit_attendance') && attendanceMention) {
-      score += hasActionVerb(normalized) ? 24 : 8;
+    if ((intent.id === 'mark_attendance' || intent.id === 'edit_attendance') && (attendanceMention || hasStatusCue(normalized))) {
+      score += hasActionVerb(normalized) ? 28 : 8;
     }
-    if (intent.id === 'get_attendance' && attendanceMention && !hasActionVerb(normalized)) score += 10;
+    if (intent.id === 'get_attendance' && attendanceMention && !hasActionVerb(normalized) && !hasStatusCue(normalized)) score += 10;
     if (intent.id === 'employee_attendance' && attendanceMention && (mentionsEmployee || context.employeeId)) {
       score += 12;
     }
 
-    if (intent.id.endsWith('_field') && (attendanceMention || containsPhrase(normalized, 'payroll') || containsPhrase(normalized, 'invoice') || containsPhrase(normalized, 'register'))) {
+    if (hasDocumentCue(normalized)) {
+      if (['payroll', 'salary_slip', 'wage_register', 'bank_invoice', 'attendance_register', 'client_invoice', 'payroll_run'].includes(intent.id)) {
+        score += 18;
+      }
+      if (['lookup_entity', 'get_location_full', 'get_org_full', 'list_employees'].includes(intent.id)) {
+        score -= 35;
+      }
+    }
+
+    if (intent.id.endsWith('_field') && (attendanceMention || hasDocumentCue(normalized) || containsPhrase(normalized, 'register'))) {
       score -= 28;
     }
     if ((intent.id === 'payroll' || intent.id === 'salary_amount') && containsPhrase(normalized, 'salary slip')) {
+      score -= 40;
+    }
+    if (intent.id === 'list_employees' && (hasStatusCue(normalized) || hasDocumentCue(normalized))) {
       score -= 40;
     }
 

@@ -20,6 +20,7 @@ function mergeSlots(sessionSlots = {}, filledSlots = {}, options = {}) {
     month: filledSlots.month || null,
     date: filledSlots.date || null,
     status: filledSlots.status || null,
+    entityStatus: filledSlots.entityStatus || null,
     fields: Array.isArray(filledSlots.fields) ? filledSlots.fields : [],
     format: filledSlots.format || 'pdf',
     outputMode: filledSlots.outputMode || null,

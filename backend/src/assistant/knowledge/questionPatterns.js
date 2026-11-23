@@ -13,12 +13,17 @@ const RESERVED_NAMES = new Set([
   'organization', 'organisation', 'org', 'company', 'कंपनी', 'संगठन',
   'location', 'site', 'लोकेशन', 'साइट',
   'employee', 'employees', 'employeee', 'कर्मचारी', 'staff', 'worker', 'workers',
-  'attendance', 'payroll', 'invoice', 'salary', 'this', 'that', 'आज', 'today',
+  'attendance', 'payroll', 'petrol', 'patrol', 'invoice', 'salary', 'wage', 'bedsheet',
+  'slip', 'register', 'sheet', 'neft', 'this', 'that', 'आज', 'today',
+  'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august',
+  'september', 'october', 'november', 'december', 'month', 'maan', 'mahina',
   'active', 'all', 'सभी', 'सारे', 'month', 'महीने', 'इस', 'उस', 'इसी', 'उसी',
   'the', 'a', 'an', 'my', 'me',
   'mobile', 'phone', 'email', 'mail', 'address', 'adress', 'bank', 'ifsc', 'uan',
   'details', 'detail', 'information', 'info', 'data', 'profile', 'जानकारी',
   'number', 'count', 'list', 'full', 'complete', 'पूरी', 'सारी',
+  'tum', 'aap', 'you', 'kya', 'kar', 'sakte', 'ho', 'help', 'madad',
+  'dashboard', 'active', 'inactive', 'deactive', 'mere', 'my',
 ]);
 
 function isReservedName(value) {
@@ -44,12 +49,16 @@ const QUESTION_PATTERNS = [
   },
   {
     intent: 'help',
-    confidence: 0.95,
+    confidence: 0.97,
     entity: null,
     outputMode: null,
     patterns: [
       /^(?:help|मदद|हेल्प|commands?|menu)$/iu,
       /(?:क्या\s+कर\s+सकते|what\s+can\s+you|how\s+to\s+use)/iu,
+      // Hinglish: "tum kya kya kar sakte ho", "aap kya kar sakte ho"
+      /(?:tum|aap|you)?\s*kya\s+(?:kya\s+)?kar\s+sakte/iu,
+      /kya\s+kya\s+(?:kar\s+)?(?:sakte|karo|ho)/iu,
+      /(?:capabilities|features|functions)\b/iu,
     ],
   },
   {
@@ -85,6 +94,8 @@ const QUESTION_PATTERNS = [
       // "… employees … October month ki absent mark/maar kar do"
       /(?:employee|employees|कर्मचारी).{0,80}(?:present|absent|प्रेजेंट|अबसेंट).{0,40}(?:लगा|laga|mark|maar|कर\s*दो|कर\s*दे)/iu,
       /(?:month|महीने|manth|january|february|march|april|may|june|july|august|september|october|november|december).{0,40}(?:present|absent|प्रेजेंट|अबसेंट).{0,40}(?:लगा|laga|mark|maar|कर\s*दो|कर\s*दे)/iu,
+      /(?:location|लोकेशन).{0,80}(?:employee|employees|कर्मचारी).{0,60}(?:present|absent|प्रेजेंट|अबसेंट)/iu,
+      /(?:present|absent|प्रेजेंट|अबसेंट).{0,50}(?:employee|employees|कर्मचारी|sare|all|सभी|सारे)/iu,
     ],
   },
   {
@@ -98,16 +109,29 @@ const QUESTION_PATTERNS = [
     ],
   },
   {
+    intent: 'count_organizations',
+    confidence: 0.98,
+    entity: 'organization',
+    outputMode: 'count',
+    forbid: ['location', 'locations', 'लोकेशन', 'employee', 'employees', 'कर्मचारी', 'payroll', 'attendance'],
+    patterns: [
+      /(?:कितने|कितनी|कितना|kitne|kitni|kitna|how\s+many|count|संख्या)\s+(?:active\s+|inactive\s+|deactive\s+)?(?:organizations?|organisations?|orgs?|कंपनी|कंपनियाँ|संगठन)/iu,
+      /(?:organizations?|organisations?|orgs?|कंपनी|कंपनियाँ|संगठन).{0,25}(?:कितने|कितनी|कितना|kitne|kitni|kitna|count|संख्या)/iu,
+      /(?:dashboard|डैशबोर्ड).{0,50}(?:कितने|कितनी|kitne|kitni).{0,40}(?:organizations?|organisations?|orgs?|कंपनी|संगठन)/iu,
+    ],
+  },
+  {
     intent: 'count_locations',
     confidence: 0.97,
     entity: 'organization',
     outputMode: 'count',
     forbid: ['employee', 'employees', 'कर्मचारी', 'payroll', 'salary', 'attendance', 'slip'],
     patterns: [
-      /(?:कितने|कितनी|कितना|kitne|kitni|kitna|how\s+many|count|संख्या)\s+(?:active\s+)?(?:location|locations|लोकेशन|sites?)/iu,
+      /(?:कितने|कितनी|कितना|kitne|kitni|kitna|how\s+many|count|संख्या)\s+(?:active\s+|inactive\s+|deactive\s+)?(?:location|locations|लोकेशन|sites?)/iu,
       /(?:location|locations|लोकेशन|sites?).{0,25}(?:कितने|कितनी|कितना|kitne|kitni|kitna|count|संख्या)\b/iu,
-      /(?:ke\s*andar|के\s*अंदर).{0,40}(?:कितने|कितनी|कितना|kitne|kitni|kitna).{0,25}(?:location|locations|लोकेशन|sites?)?/iu,
-      /(?:organization|organisation|org|कंपनी).{0,40}(?:के\s*अंदर|ke\s*andar).{0,30}(?:कितने|कितनी|कितना|kitne|kitni|kitna)/iu,
+      /(?:dashboard|डैशबोर्ड).{0,50}(?:कितने|कितनी|kitne|kitni).{0,40}(?:location|locations|लोकेशन|sites?)/iu,
+      /(?:ke\s*andar|के\s*अंदर).{0,40}(?:कितने|कितनी|कितना|kitne|kitni|kitna).{0,30}(?:location|locations|लोकेशन|sites?)/iu,
+      /(?:organization|organisation|org|कंपनी).{0,40}(?:के\s*अंदर|ke\s*andar).{0,30}(?:कितने|कितनी|कितना|kitne|kitni|kitna).{0,25}(?:location|locations|लोकेशन|sites?)/iu,
     ],
   },
   {
@@ -158,7 +182,11 @@ const QUESTION_PATTERNS = [
     confidence: 0.96,
     entity: 'employee',
     outputMode: null,
-    patterns: [/(?:salary\s*slip|payslip|pay\s*slip|सैलरी\s*स्लिप)/iu],
+    patterns: [
+      /(?:salary\s*slip|payslip|pay\s*slip|सैलरी\s*स्लिप|celery\s*slip|salary\s*sleep)/iu,
+      /(?:location|लोकेशन|organization|org).{0,60}(?:salary\s*slip|payslip|सैलरी\s*स्लिप)/iu,
+      /(?:january|february|march|april|may|june|july|august|september|october|november|december|month).{0,40}(?:salary\s*slip|payslip)/iu,
+    ],
   },
   {
     intent: 'wage_register',
@@ -166,8 +194,10 @@ const QUESTION_PATTERNS = [
     entity: 'location',
     outputMode: null,
     patterns: [
-      /(?:wage\s*register|वेज\s*रजिस्टर|form\s*xvii|wage\s*sheet)/iu,
-      /(?:सभी|सारी|all).{0,30}(?:location|लोकेशन).{0,40}(?:wage\s*register|वेज\s*रजिस्टर)/iu,
+      /(?:wage\s*register|वेज\s*रजिस्टर|form\s*xvii|wage\s*sheet|bedsheet|bed\s*sheet|wedge\s*sheet)/iu,
+      /(?:सभी|सारी|all).{0,30}(?:location|लोकेशन).{0,40}(?:wage\s*register|वेज\s*रजिस्टर|wage\s*sheet)/iu,
+      /(?:location|लोकेशन).{0,50}(?:january|february|march|april|may|june|july|august|september|october|november|december|month).{0,40}(?:wage\s*register|wage\s*sheet|bedsheet|wedge\s*sheet)/iu,
+      /(?:january|february|march|april|may|june|july|august|september|october|november|december|month).{0,50}(?:location|लोकेशन).{0,40}(?:wage\s*register|wage\s*sheet|bedsheet|wedge\s*sheet)/iu,
     ],
   },
   {
@@ -179,6 +209,7 @@ const QUESTION_PATTERNS = [
       /(?:attendance\s*register|अटेंडेंस\s*रजिस्टर|attendance\s*sheet)/iu,
       /(?:सभी|सारी|all).{0,30}(?:location|लोकेशन).{0,40}(?:attendance|अटेंडेंस).{0,20}(?:register|रजिस्टर|pdf|excel|दो|दे)?/iu,
       /(?:organization|org|कंपनी).{0,50}(?:सभी|सारी|all).{0,20}(?:location|लोकेशन).{0,30}(?:attendance|अटेंडेंस)/iu,
+      /(?:location|लोकेशन).{0,50}(?:january|february|march|april|may|june|july|august|september|october|november|december|month).{0,40}(?:attendance\s*register|attendance\s*sheet)/iu,
     ],
   },
   {
@@ -189,6 +220,7 @@ const QUESTION_PATTERNS = [
     patterns: [
       /(?:bank\s*invoice|bank\s*letter|बैंक\s*इनवॉइस|neft\s*letter|bank\s*payment)/iu,
       /(?:सभी|सारी|all).{0,30}(?:location|लोकेशन).{0,40}(?:bank\s*invoice|बैंक\s*इनवॉइस)/iu,
+      /(?:location|लोकेशन).{0,50}(?:january|february|march|april|may|june|july|august|september|october|november|december|month).{0,40}(?:bank\s*invoice|bank\s*letter|neft)/iu,
     ],
   },
   {
@@ -200,12 +232,16 @@ const QUESTION_PATTERNS = [
   },
   {
     intent: 'client_invoice',
-    confidence: 0.94,
+    confidence: 0.96,
     entity: 'location',
     outputMode: null,
+    forbid: ['bank invoice', 'bank letter', 'neft', 'बैंक', 'payroll', 'wage', 'salary slip'],
     patterns: [
       /(?:client\s*invoice|client\s*bill|location\s*invoice|बिल\s*दो)/iu,
-      /(?:invoice|बिल).{0,20}(?:दो|दे|बताओ|generate|download|बनाओ|निकालो)/iu,
+      /(?:invoice|invoicee|बिल).{0,25}(?:दो|दे|do|list|बताओ|generate|download|बनाओ|निकालो|चाहिए)/iu,
+      /(?:location|लोकेशन).{0,60}(?:invoice|invoicee|बिल)/iu,
+      /(?:invoice|invoicee|बिल).{0,40}(?:location|लोकेशन|november|december|january|february|march|april|may|june|july|august|september|october|month)/iu,
+      /(?:january|february|march|april|may|june|july|august|september|october|november|december|month|इस\s*महीने|this\s*month).{0,40}(?:invoice|invoicee|बिल)/iu,
     ],
   },
   {
@@ -214,11 +250,11 @@ const QUESTION_PATTERNS = [
     entity: 'location',
     outputMode: null,
     patterns: [
-      /(?:payroll|पेरोल|pay\s*roll)(?:\s*(?:दो|दे|बताओ|दिखाओ|details|जानकारी|report|निकालो|generate))?/iu,
-      /(?:इस\s*महीने|this\s*month|current\s*month).{0,25}(?:payroll|पेरोल)/iu,
-      /(?:organization|org|कंपनी|के\s*अंदर|ke\s*andar).{0,50}(?:payroll|पेरोल)/iu,
-      /(?:सभी|सारी|all).{0,25}(?:location|लोकेशन).{0,30}(?:payroll|पेरोल)/iu,
-      /(?:october|november|आक्ट[ोो]बर|नव[म्म]्बर|इस\s*महीने|current\s*month).{0,40}(?:payroll|पेरोल)/iu,
+      /(?:payroll|पेरोल|pay\s*roll|petrol|patrol)(?:\s*(?:दो|दे|बताओ|दिखाओ|details|जानकारी|report|निकालो|generate))?/iu,
+      /(?:इस\s*महीने|this\s*month|current\s*month).{0,25}(?:payroll|पेरोल|petrol|patrol)/iu,
+      /(?:organization|org|कंपनी|के\s*अंदर|ke\s*andar|location|लोकेशन).{0,50}(?:payroll|पेरोल|petrol|patrol)/iu,
+      /(?:सभी|सारी|all).{0,25}(?:location|लोकेशन).{0,30}(?:payroll|पेरोल|petrol|patrol)/iu,
+      /(?:january|february|march|april|may|june|july|august|september|october|november|december|आक्ट[ोो]बर|नव[म्म]्बर|सितंबर|इस\s*महीने|current\s*month).{0,40}(?:payroll|पेरोल|petrol|patrol)/iu,
     ],
   },
   {

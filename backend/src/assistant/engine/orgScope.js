@@ -20,6 +20,7 @@ const ORG_ACTION_INTENTS = new Set([
   'list_employees',
   'count_employees',
   'count_locations',
+  'count_organizations',
   'get_attendance',
   'mark_attendance',
   'edit_attendance',
@@ -56,9 +57,9 @@ function isOrgActionIntent(intent) {
  * null = unset (org-only actions like payroll/list can still use organizationId alone)
  */
 function hasNamedLocationPhrase(value) {
-  // "madanganj location" / "pirana location ke andar" — a place name before location
-  return /(?:^|\s)([\p{L}][\p{L}\p{N}'.\-]{2,}(?:\s+[\p{L}][\p{L}\p{N}'.\-]{2,}){0,3})\s+(?:location|लोकेशन|site)\b/iu.test(value)
-    || /\b(?:location|लोकेशन|site)\s+([\p{L}][\p{L}\p{N}'.\-]{2,}(?:\s+[\p{L}][\p{L}\p{N}'.\-]{2,}){0,3})\b/iu.test(value);
+  // "madanganj location" / "tata db location" — allow short tokens like "db"
+  return /(?:^|\s)([\p{L}\p{N}][\p{L}\p{N}'.\-]{0,20}(?:\s+[\p{L}\p{N}][\p{L}\p{N}'.\-]{0,20}){0,3})\s+(?:location|लोकेशन|site)\b/iu.test(value)
+    || /\b(?:location|लोकेशन|site)\s+([\p{L}\p{N}][\p{L}\p{N}'.\-]{0,20}(?:\s+[\p{L}\p{N}][\p{L}\p{N}'.\-]{0,20}){0,3})\b/iu.test(value);
 }
 
 function hasAllLocationsPhrase(value) {
@@ -168,53 +169,8 @@ async function resolveOrgScopedEntities(text, {
   let location = null;
   let locationMatches = [];
 
-  // 1) Resolve organization — prefer company-name candidates
-  const orgCandidates = names.length ? names : [];
-  if (sessionSlots.organizationId && !orgCandidates.length && (mentionsOrg || usesSoftOrgRef(text))) {
-    // follow-up without new org name handled by caller via session
-  }
-
-  for (const candidate of orgCandidates) {
-    const resolution = await resolveOrganization(candidate, { minScore: 78 });
-    if (resolution.status === 'exact' || resolution.status === 'fuzzy') {
-      organization = resolution.matches[0];
-      organizationMatches = resolution.matches;
-      break;
-    }
-    if (resolution.status === 'ambiguous' && !organizationMatches.length) {
-      organizationMatches = resolution.matches;
-    }
-  }
-
-  // Typed "organization" without a clear company match — try full leftover as org
-  if (!organization && mentionsOrg && orgCandidates.length) {
-    for (const candidate of orgCandidates) {
-      const resolution = await resolveOrganization(candidate, { minScore: 70 });
-      if (resolution.matches?.length === 1) {
-        organization = resolution.matches[0];
-        organizationMatches = resolution.matches;
-        break;
-      }
-    }
-  }
-
-  // 2) Resolve location under org (or globally if org not found yet)
-  const remainder = organization ? stripResolvedName(text, organization) : normalizeName(text);
-  const locationCandidates = candidateNamesFromText(remainder, null)
-    .filter((name) => !organization || normalizeName(organization.organizationName) !== name);
-
-  // Also try original names that aren't the org's company name
-  const extraLoc = names.filter((name) => {
-    if (!organization) return true;
-    const orgName = normalizeName(organization.organizationName);
-    const contact = normalizeName(organization.name);
-    return name !== orgName && name !== contact && !orgName.includes(name);
-  });
-  const locNames = [...new Set([...locationCandidates, ...extraLoc])]
-    .filter((name) => name.split(/\s+/).length >= 1 && name.length >= 3)
-    .sort((a, b) => b.length - a.length);
-
-  // Prefer an explicit "jo <place> hai" / "Madanganj location" even if wording also says "all employees"
+  // Prefer an explicit "jo <place> hai" / "Tata DB location" — resolve LOCATION first
+  // so "tata db" is not stolen by a similarly named organization ("tata fund").
   const joPlaces = extractJoClauseNames(text);
   const namedPlace = hasNamedLocationPhrase(text);
   const forceSingleLocation = joPlaces.length > 0
@@ -222,35 +178,138 @@ async function resolveOrgScopedEntities(text, {
     || namedPlace
     || (mentionsLocation && locationScope !== 'all_in_org');
 
-  // Pull the place token from "X location …" so resolve doesn't miss it among leftovers
   const namedPlaceMatch = String(text || '').match(
-    /(?:^|\s)([\p{L}][\p{L}\p{N}'.\-]{2,}(?:\s+[\p{L}][\p{L}\p{N}'.\-]{2,}){0,3})\s+(?:location|लोकेशन|site)\b/iu,
+    /(?:^|\s)([\p{L}\p{N}][\p{L}\p{N}'.\-]{0,20}(?:\s+[\p{L}\p{N}][\p{L}\p{N}'.\-]{0,20}){0,3})\s+(?:location|लोकेशन|site)\b/iu,
   );
-  if (namedPlaceMatch?.[1]) {
-    const place = normalizeName(namedPlaceMatch[1]);
-    if (place && !isReservedName(place)) locNames.unshift(place);
+  const placeToken = namedPlaceMatch?.[1] ? normalizeName(namedPlaceMatch[1]) : null;
+  if (placeToken && isReservedName(placeToken)) {
+    // ignore reserved place tokens
   }
 
-  // Named place this turn → search locations globally (ignore previous session org filter)
-  const orgIdForLocation = forceSingleLocation
-    ? (organization?.id || null)
+  const earlyPlaceNames = [...new Set([
+    ...joPlaces,
+    ...(placeToken && !isReservedName(placeToken) ? [placeToken] : []),
+  ])].sort((a, b) => b.length - a.length);
+
+  async function adoptLocation(hit) {
+    location = hit;
+    locationMatches = [hit];
+    if (hit.organizationId) {
+      const { getOrganizationById } = require('./entityIndex');
+      const locOrg = await getOrganizationById(hit.organizationId);
+      if (locOrg) {
+        organization = locOrg;
+        organizationMatches = [locOrg];
+      }
+    }
+  }
+
+  if (earlyPlaceNames.length) {
+    for (const candidate of earlyPlaceNames.slice(0, 4)) {
+      if (candidate.split(/\s+/).length === 1 && candidate.length < 3) continue;
+      const resolution = await resolveLocation(candidate, { minScore: 70 });
+      if (resolution.status === 'exact' || resolution.status === 'fuzzy') {
+        await adoptLocation(resolution.matches[0]);
+        break;
+      }
+      if (resolution.status === 'ambiguous' && !locationMatches.length) {
+        locationMatches = resolution.matches;
+      }
+    }
+  }
+
+  // Document asks often omit the word "location" ("Tata DB ka invoice do") —
+  // try strong location matches before org, so work-names are not stolen by company names.
+  const docNeedsPlace = [
+    'client_invoice', 'wage_register', 'attendance_register', 'bank_invoice',
+    'salary_slip', 'payroll', 'mark_attendance', 'get_attendance',
+  ].includes(intent);
+  if (!location && docNeedsPlace) {
+    for (const candidate of names.slice(0, 6)) {
+      if (!candidate || candidate.length < 3) continue;
+      if (isReservedName(candidate)) continue;
+      const resolution = await resolveLocation(candidate, { minScore: 88 });
+      if (resolution.status === 'exact' || (resolution.status === 'fuzzy' && (resolution.score || 0) >= 90)) {
+        await adoptLocation(resolution.matches[0]);
+        break;
+      }
+    }
+  }
+
+  // 1) Resolve organization only when location was not pinned by "X location"
+  const orgCandidates = names.length ? names : [];
+  if (!location) {
+    if (sessionSlots.organizationId && !orgCandidates.length && (mentionsOrg || usesSoftOrgRef(text))) {
+      // follow-up without new org name handled by caller via session
+    }
+
+    for (const candidate of orgCandidates) {
+      // Skip candidates that are clearly the spoken place name
+      if (placeToken && (candidate === placeToken || placeToken.includes(candidate) || candidate.includes(placeToken))) {
+        continue;
+      }
+      const resolution = await resolveOrganization(candidate, { minScore: 78 });
+      if (resolution.status === 'exact' || resolution.status === 'fuzzy') {
+        organization = resolution.matches[0];
+        organizationMatches = resolution.matches;
+        break;
+      }
+      if (resolution.status === 'ambiguous' && !organizationMatches.length) {
+        organizationMatches = resolution.matches;
+      }
+    }
+
+    if (!organization && mentionsOrg && orgCandidates.length) {
+      for (const candidate of orgCandidates) {
+        if (placeToken && (candidate === placeToken || placeToken.includes(candidate))) continue;
+        const resolution = await resolveOrganization(candidate, { minScore: 70 });
+        if (resolution.matches?.length === 1) {
+          organization = resolution.matches[0];
+          organizationMatches = resolution.matches;
+          break;
+        }
+      }
+    }
+  }
+
+  // 2) Resolve location under org (or globally) when not already pinned
+  const remainder = organization ? stripResolvedName(text, organization) : normalizeName(text);
+  const locationCandidates = candidateNamesFromText(remainder, null)
+    .filter((name) => !organization || normalizeName(organization.organizationName) !== name);
+
+  const extraLoc = names.filter((name) => {
+    if (!organization) return true;
+    const orgName = normalizeName(organization.organizationName);
+    const contact = normalizeName(organization.name);
+    return name !== orgName && name !== contact && !orgName.includes(name);
+  });
+  const locNames = [...new Set([
+    ...(placeToken && !isReservedName(placeToken) ? [placeToken] : []),
+    ...locationCandidates,
+    ...extraLoc,
+  ])]
+    .filter((name) => name.split(/\s+/).length >= 1 && name.length >= 3)
+    .sort((a, b) => b.length - a.length);
+
+  // Named place → always search locations globally (do not filter by a wrongly matched org)
+  const orgIdForLocation = (namedPlace || joPlaces.length > 0)
+    ? null
     : (organization?.id || sessionSlots.organizationId || null);
 
-  // Resolve a single location when named (or "jo X hai"); skip when truly all-locations with no place name
-  if ((forceSingleLocation || (locationScope !== 'all_in_org' && locNames.length)) && locNames.length) {
+  if (!location && (forceSingleLocation || (locationScope !== 'all_in_org' && locNames.length)) && locNames.length) {
     const tryNames = [...new Set([...joPlaces, ...locNames])].sort((a, b) => b.length - a.length);
     for (const candidate of tryNames.slice(0, 6)) {
-      if (organization) {
+      if (organization && !(namedPlace || joPlaces.length)) {
         const orgTokens = normalizeName(organization.organizationName || '').split(/\s+/).filter(Boolean);
         const candTokens = candidate.split(/\s+/);
         if (orgTokens.length && candTokens.every((token) => orgTokens.includes(token)) && candTokens.length <= orgTokens.length) {
           continue;
         }
       }
-      if (candidate.split(/\s+/).length === 1 && candidate.length < 4) continue;
+      if (candidate.split(/\s+/).length === 1 && candidate.length < 3) continue;
       const resolution = await resolveLocation(candidate, {
         organizationId: orgIdForLocation || undefined,
-        minScore: 74,
+        minScore: 70,
       });
       if (resolution.status === 'exact' || resolution.status === 'fuzzy') {
         location = resolution.matches[0];
@@ -288,10 +347,19 @@ async function resolveOrgScopedEntities(text, {
     effectiveScope = 'single';
   }
 
-  // Validate location belongs to org
+  // Named place wins: keep location and adopt its org. Otherwise drop mismatched location.
   if (organization && location && String(location.organizationId) !== String(organization.id)) {
-    locationMatches = [location];
-    location = null;
+    if (namedPlace || joPlaces.length > 0) {
+      const { getOrganizationById } = require('./entityIndex');
+      const locOrg = await getOrganizationById(location.organizationId);
+      if (locOrg) {
+        organization = locOrg;
+        organizationMatches = [locOrg];
+      }
+    } else {
+      locationMatches = [location];
+      location = null;
+    }
   }
 
   return {

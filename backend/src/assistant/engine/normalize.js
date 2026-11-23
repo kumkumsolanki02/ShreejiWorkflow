@@ -160,11 +160,13 @@ function workingDatesInMonth(month, timeZone = 'Asia/Kolkata') {
 
 function wantsMonthWideAttendance(text) {
   const value = String(text || '').toLowerCase();
-  if (/\b(?:sari|saari|सारी|पूरी|poori|poora|entire|whole|full)\b.{0,30}\battendance\b/.test(value)) return true;
-  if (/\battendance\b.{0,30}\b(?:sari|saari|सारी|पूरी|month|महीने|महीना)\b/.test(value)) return true;
+  const monthWord = String.raw`(?:january|february|march|april|may|june|july|august|september|october|november|december|month|महीने|महीना|this\s*month|last\s*month|current\s*month|इस\s*महीने)`;
+  if (/\b(?:sari|saari|सारी|पूरी|poori|poora|entire|whole|full|all|सभी|सारे)\b.{0,40}\b(?:attendance|present|absent)\b/.test(value)) return true;
+  if (/\b(?:attendance|present|absent)\b.{0,40}\b(?:sari|saari|सारी|पूरी|month|महीने|महीना|all|सभी)\b/.test(value)) return true;
   if (/\bas\s+a\s+\w+\s+month\b/.test(value)) return true;
-  if (/\b(?:november|october|december|january|february|march|april|may|june|july|august|september|इस\s*महीने|this\s*month|current\s*month)\b.{0,40}\b(?:attendance|present|absent)\b/.test(value)) return true;
-  if (/\b(?:attendance|present|absent)\b.{0,40}\b(?:november|october|december|january|february|march|april|may|june|july|august|september|month|महीने)\b/.test(value)) return true;
+  if (new RegExp(`\\b${monthWord}\\b.{0,50}\\b(?:attendance|present|absent)\\b`, 'i').test(value)) return true;
+  if (new RegExp(`\\b(?:attendance|present|absent)\\b.{0,50}\\b${monthWord}\\b`, 'i').test(value)) return true;
+  if (/\b(?:employee|employees|कर्मचारी).{0,40}(?:present|absent).{0,30}(?:month|महीने)/i.test(value)) return true;
   return false;
 }
 

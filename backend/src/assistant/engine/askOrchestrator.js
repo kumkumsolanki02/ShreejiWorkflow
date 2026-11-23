@@ -260,11 +260,11 @@ async function healPendingIdempotencyKeys() {
 }
 
 function isConfirmUtterance(text) {
-  return /^(?:confirm|yes|yeah|yep|ok|okay|haan|haa|हाँ|हां|जी|सही|कर\s*दो|kar\s*do|go\s*ahead|proceed)$/iu.test(String(text || '').trim());
+  return /^(?:confirm|yes|yeah|yep|yup|ok|okay|haan|haa|हाँ|हां|जी\s*हाँ|जी|सही|कर\s*दो|kar\s*do|go\s*ahead|proceed|done|thik\s*hai|ठीक\s*है|bilkul|बिल्कुल)$/iu.test(String(text || '').trim());
 }
 
 function isCancelUtterance(text) {
-  return /^(?:cancel|रद्द|कैंसल|mat\s+karo|don't|do\s+not|no|nahi|नहीं|ना|cancel\s*karo|रद्द\s*करो)$/iu.test(String(text || '').trim());
+  return /^(?:cancel|रद्द|कैंसल|mat\s+karo|don't|do\s+not|no|nahi|नहीं|ना|cancel\s*karo|रद्द\s*करो|mat\s*do| छोड़\s*दो|rehne\s*do)$/iu.test(String(text || '').trim());
 }
 
 async function executeIntent(user, intent, slots, language, timeZone) {
@@ -357,28 +357,54 @@ async function executeIntent(user, intent, slots, language, timeZone) {
         mode: 'count',
         language,
       });
+    case 'count_organizations': {
+      const { getOrganizationsByFilter } = require('./entityIndex');
+      const entityStatus = slots.entityStatus || 'active';
+      const orgs = await getOrganizationsByFilter({ status: entityStatus });
+      const label = entityStatus === 'inactive' ? 'inactive' : 'active';
+      const lines = orgs.slice(0, 40).map((item, index) => `${index + 1}. ${item.organizationName || item.name || item.id}`);
+      const more = orgs.length > 40 ? `\n… +${orgs.length - 40} more` : '';
+      return {
+        ok: true,
+        reply: language.startsWith('hi')
+          ? `Dashboard में ${label} organizations: ${orgs.length}\n${lines.join('\n')}${more}`
+          : `Dashboard — ${label} organizations: ${orgs.length}\n${lines.join('\n')}${more}`,
+        data: { count: orgs.length, status: entityStatus, organizations: orgs.map((item) => ({ id: item.id, name: item.organizationName })) },
+        source: 'data',
+      };
+    }
     case 'count_locations': {
+      const { getLocationsByFilter, getLocationsByOrganizationId, getOrganizationById } = require('./entityIndex');
+      const entityStatus = slots.entityStatus || 'active';
+      const label = entityStatus === 'inactive' ? 'inactive' : 'active';
+
       if (!slots.organizationId) {
+        const locs = await getLocationsByFilter({ status: entityStatus });
+        const lines = locs.slice(0, 40).map((item, index) => `${index + 1}. ${item.name || item.workName || item.id}`);
+        const more = locs.length > 40 ? `\n… +${locs.length - 40} more` : '';
         return {
-          ok: false,
+          ok: true,
           reply: language.startsWith('hi')
-            ? 'किस organization की locations गिननी हैं?'
-            : 'Which organization should I count locations for?',
+            ? `Dashboard में ${label} locations: ${locs.length}\n${lines.join('\n')}${more}`
+            : `Dashboard — ${label} locations: ${locs.length}\n${lines.join('\n')}${more}`,
+          data: { count: locs.length, status: entityStatus, locations: locs.map((item) => ({ id: item.id, name: item.name, workName: item.workName })) },
+          source: 'data',
+          slots: { locationIds: locs.map((item) => item.id), locationScope: 'dashboard', entityStatus },
         };
       }
-      const { getLocationsByOrganizationId, getOrganizationById } = require('./entityIndex');
-      const locs = await getLocationsByOrganizationId(slots.organizationId, { status: 'active' });
+
+      const locs = await getLocationsByOrganizationId(slots.organizationId, { status: entityStatus });
       const org = await getOrganizationById(slots.organizationId);
       const orgName = org?.organizationName || 'Organization';
       const lines = locs.map((item, index) => `${index + 1}. ${item.name || item.workName || item.id}`);
       return {
         ok: true,
         reply: language.startsWith('hi')
-          ? `${orgName} में active locations: ${locs.length}\n${lines.join('\n')}`
-          : `${orgName} — active locations: ${locs.length}\n${lines.join('\n')}`,
-        data: { count: locs.length, locations: locs.map((item) => ({ id: item.id, name: item.name, workName: item.workName })) },
+          ? `${orgName} में ${label} locations: ${locs.length}\n${lines.join('\n')}`
+          : `${orgName} — ${label} locations: ${locs.length}\n${lines.join('\n')}`,
+        data: { count: locs.length, status: entityStatus, locations: locs.map((item) => ({ id: item.id, name: item.name, workName: item.workName })) },
         source: 'data',
-        slots: { organizationId: slots.organizationId, locationIds: locs.map((item) => item.id), locationScope: 'all_in_org' },
+        slots: { organizationId: slots.organizationId, locationIds: locs.map((item) => item.id), locationScope: 'all_in_org', entityStatus },
       };
     }
     case 'get_attendance':
@@ -825,6 +851,7 @@ async function askAssistantInner(user, input = {}, language, timeZone) {
     slots.searchTypes = filled.searchTypes || filled.slots?.searchTypes || null;
     slots.locationIds = filled.slots?.locationIds || slots.locationIds || null;
     slots.locationScope = filled.slots?.locationScope || slots.locationScope || null;
+    slots.entityStatus = filled.slots?.entityStatus || slots.entityStatus || null;
     if (filled.slots?.format) slots.format = filled.slots.format;
 
     if (!slots.month && isDocumentIntent(effectiveIntent)) {
@@ -871,12 +898,16 @@ async function askAssistantInner(user, input = {}, language, timeZone) {
       'payroll', 'salary_slip', 'wage_register', 'attendance_register', 'bank_invoice',
       'list_employees', 'count_employees', 'get_attendance', 'mark_attendance', 'edit_attendance',
     ].includes(effectiveIntent);
+    const docNeedsLocationChoice = [
+      'client_invoice', 'wage_register', 'attendance_register', 'bank_invoice', 'salary_slip', 'payroll',
+    ].includes(effectiveIntent);
 
     const needsEntityChoice = needsCrossChoice || (
       ((effectiveIntent || '').includes('employee') && !slots.employeeId && filled.ambiguous.employees.length > 1)
       || ((effectiveIntent || '').includes('org') && !slots.organizationId && filled.ambiguous.organizations.length > 1)
       || ((effectiveIntent || '').includes('location') && !slots.locationId && filled.ambiguous.locations.length > 1)
       || (effectiveIntent === 'lookup_entity' && crossHits.length > 1)
+      || (docNeedsLocationChoice && !slots.locationId && filled.ambiguous.locations?.length > 1)
       || (orgActionNeedsOrg && !slots.organizationId && !slots.locationId
         && ((filled.ambiguous.locations?.length > 1) || (filled.ambiguous.organizations?.length > 1)))
     );

@@ -244,11 +244,22 @@ async function getEmployeesByFilter({ organizationId, locationId, status = 'acti
 }
 
 async function getLocationsByOrganizationId(organizationId, { status = 'active' } = {}) {
-  if (!organizationId) return [];
+  return getLocationsByFilter({ organizationId, status });
+}
+
+async function getLocationsByFilter({ organizationId = null, status = 'active' } = {}) {
   const data = await refreshEntityIndex();
   return data.locations.filter((location) => {
-    if (location.organizationId !== String(organizationId)) return false;
+    if (organizationId && location.organizationId !== String(organizationId)) return false;
     if (status && status !== 'all' && location.status !== status) return false;
+    return true;
+  });
+}
+
+async function getOrganizationsByFilter({ status = 'active' } = {}) {
+  const data = await refreshEntityIndex();
+  return data.organizations.filter((org) => {
+    if (status && status !== 'all' && org.status !== status) return false;
     return true;
   });
 }
@@ -382,6 +393,8 @@ module.exports = {
   resolveEmployee,
   getEmployeesByFilter,
   getLocationsByOrganizationId,
+  getLocationsByFilter,
+  getOrganizationsByFilter,
   getOrganizationById,
   getLocationById,
   getEmployeeById,
