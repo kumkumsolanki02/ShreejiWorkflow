@@ -17,6 +17,7 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const organizationRoutes = require('./routes/organizationRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
+const assistantRoutes = require('./assistant/routes/assistantRoutes');
 
 function resolveFrontendDist() {
   if (process.env.FRONTEND_DIST) {
@@ -88,10 +89,19 @@ function createApp() {
   });
   const defaultJsonParser = express.json({ limit: '10kb' });
   const bulkAttendanceJsonParser = express.json({ limit: '512kb' });
+  const assistantJsonParser = express.json({ limit: '64kb' });
   const largeJsonPaths = new Set(['/api/attendance/bulk', '/api/attendance/sheet']);
-  app.use((req, res, next) => (
-    largeJsonPaths.has(req.path) ? bulkAttendanceJsonParser : defaultJsonParser
-  )(req, res, next));
+  const assistantJsonPaths = new Set([
+    '/api/assistant/ask',
+    '/api/assistant/feedback',
+  ]);
+  app.use((req, res, next) => {
+    if (largeJsonPaths.has(req.path)) return bulkAttendanceJsonParser(req, res, next);
+    if (assistantJsonPaths.has(req.path) || /^\/api\/assistant\/feedback\/[^/]+$/.test(req.path)) {
+      return assistantJsonParser(req, res, next);
+    }
+    return defaultJsonParser(req, res, next);
+  });
   if (process.env.NODE_ENV !== 'test') {
     app.use(morgan('dev'));
   }
@@ -102,7 +112,6 @@ function createApp() {
       database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
     });
   });
-  app.use('/api/assistant', assistantRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/attendance', attendanceRoutes);
   app.use('/api/dashboard', dashboardRoutes);
@@ -114,6 +123,7 @@ function createApp() {
   app.use('/api/organizations', organizationRoutes);
   app.use('/api/settings', settingsRoutes);
   app.use('/api/tickets', ticketRoutes);
+  app.use('/api/assistant', assistantRoutes);
 
   if (serveFrontend) {
     app.use(express.static(frontendDist, { index: false, maxAge: '1h' }));

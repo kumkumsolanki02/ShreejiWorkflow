@@ -14,6 +14,8 @@
     "seed:malikhera": "node src/scripts/seed-malikhera.js",
     "seed:months": "node src/scripts/seed-three-months.js",
     "test": "node --test",
+    "test:assistant": "node src/assistant/scripts/smoke-nlu.js",
+    "test:assistant:api": "node src/assistant/scripts/smoke-api.js",
     "verify:billing": "node src/scripts/verify-billing.js"
   },
   "keywords": [],
@@ -26,7 +28,6 @@
     "cors": "^2.8.6",
     "dotenv": "^18.0.6",
     "express": "^5.3.0",
-    "fuse.js": "^7.5.0",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.11.1",
