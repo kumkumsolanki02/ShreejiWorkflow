@@ -131,7 +131,7 @@ async function bankLetter(details: BankLetterDetails, format: AssistantDocument[
 
 /** A saved batch is re-read so the letter matches the printed one; a single person's letter is not saved. */
 async function downloadBankInvoice(document: AssistantDocument) {
-  const { format, month, locationId, employeeIds, batchId, reprint } = document;
+  const { format, month, locationId, locationIds, employeeIds, batchId, reprint } = document;
   if (batchId) {
     const result = await getBankInvoiceBatch(batchId);
     await bankLetter({
@@ -145,8 +145,9 @@ async function downloadBankInvoice(document: AssistantDocument) {
     if (reprint) await logBankInvoiceActivity(batchId, format);
     return;
   }
-  if (!locationId) throw new Error('Location is required for this document.');
-  const [payments, locations] = await Promise.all([getBankPayments({ month, locationIds: [locationId] }), getBankInvoiceLocations(month)]);
+  const ids = (locationIds?.length ? locationIds : locationId ? [locationId] : []).filter(Boolean) as string[];
+  if (!ids.length) throw new Error('Location is required for this document.');
+  const [payments, locations] = await Promise.all([getBankPayments({ month, locationIds: ids }), getBankInvoiceLocations(month)]);
   const rows = payments.rows
     .filter((row) => !employeeIds || employeeIds.includes(row.employeeId))
     .map((row, index) => ({ ...row, serial: index + 1 }));
@@ -191,9 +192,51 @@ async function downloadClientInvoice(document: AssistantDocument) {
   await logInvoiceActivity(organizationId, locationId, invoice.id, format).catch(() => null);
 }
 
+async function downloadWageForLocation(document: AssistantDocument, locationId: string) {
+  const { format, month, organizationId, employeeIds } = document;
+  if (!organizationId) throw new Error('Organization is required for this document.');
+  const register = await getWageRegister({ organizationId, locationId, month });
+  const wageRows = employeeIds
+    ? register.rows.filter((row) => employeeIds.includes(row.employeeId))
+    : register.rows;
+  if (wageRows.length === 0) {
+    throw new EmptyDocumentError(
+      employeeIds?.length
+        ? 'इस employee का इस महीने कोई wage data नहीं मिला।'
+        : 'इस location पर इस महीने कोई wage data नहीं मिला।',
+    );
+  }
+  const filteredRegister = employeeIds
+    ? {
+      ...register,
+      rows: wageRows.map((row, index) => ({ ...row, serial: index + 1 })),
+    }
+    : register;
+  if (format === 'excel') await exportWageRegisterExcel(filteredRegister);
+  else await exportWageRegisterPdf(filteredRegister);
+}
+
+async function downloadAttendanceRegisterForLocation(document: AssistantDocument, locationId: string) {
+  const { format, month, organizationId, employeeIds } = document;
+  if (!organizationId) throw new Error('Organization is required for this document.');
+  const register = await getAttendanceRegister({ organizationId, locationId, month });
+  const rows = employeeIds ? register.rows.filter((row) => employeeIds.includes(row.employeeId)) : register.rows;
+  if (rows.length === 0) throw new EmptyDocumentError('इस महीने का कोई attendance record नहीं मिला।');
+  const filtered = employeeIds
+    ? {
+      ...register,
+      rows: rows.map((row, index) => ({ ...row, serial: index + 1 })),
+      totalMandays: rows.reduce((sum, row) => sum + row.totalPresent, 0),
+    }
+    : register;
+  const options = employeeIds ? { filePrefix: `attendance-${slug(rows[0].name)}` } : {};
+  if (format === 'excel') await exportRegisterExcel(filtered, options);
+  else await exportRegisterPdf(filtered, 'download', options);
+}
+
 /** Fetches the data for a document the assistant planned and downloads it with the dashboard's own exporters. */
 export async function downloadAssistantDocument(document: AssistantDocument) {
-  const { type, format, month, organizationId, locationId, employeeIds, title } = document;
+  const { type, format, month, organizationId, locationId, locationIds, employeeIds, title } = document;
   const { fromDate, toDate } = monthRange(month);
 
   if (type === 'bank_invoice') {
@@ -216,6 +259,7 @@ export async function downloadAssistantDocument(document: AssistantDocument) {
   }
 
   if (type === 'salary_slip' || type === 'payroll') {
+    // Org-wide (all locations) when organizationId set and no single locationId
     const payroll = await getPayroll({
       fromDate,
       toDate,
@@ -231,42 +275,20 @@ export async function downloadAssistantDocument(document: AssistantDocument) {
     return;
   }
 
-  if (!organizationId || !locationId) throw new Error('Location is required for this document.');
+  const multiIds = (locationIds?.length ? locationIds : locationId ? [locationId] : []).filter(Boolean) as string[];
+  if (!organizationId || !multiIds.length) throw new Error('Location is required for this document.');
 
-  if (type === 'wage_register') {
-    const register = await getWageRegister({ organizationId, locationId, month });
-    const wageRows = employeeIds
-      ? register.rows.filter((row) => employeeIds.includes(row.employeeId))
-      : register.rows;
-    if (wageRows.length === 0) {
-      throw new EmptyDocumentError(
-        employeeIds?.length
-          ? 'इस employee का इस महीने कोई wage data नहीं मिला।'
-          : 'इस location पर इस महीने कोई wage data नहीं मिला।',
-      );
+  let downloaded = 0;
+  let lastError: Error | null = null;
+  for (const id of multiIds) {
+    try {
+      if (type === 'wage_register') await downloadWageForLocation(document, id);
+      else await downloadAttendanceRegisterForLocation(document, id);
+      downloaded += 1;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (!(error instanceof EmptyDocumentError)) throw error;
     }
-    const filteredRegister = employeeIds
-      ? {
-        ...register,
-        rows: wageRows.map((row, index) => ({ ...row, serial: index + 1 })),
-      }
-      : register;
-    if (format === 'excel') await exportWageRegisterExcel(filteredRegister);
-    else await exportWageRegisterPdf(filteredRegister);
-    return;
   }
-
-  const register = await getAttendanceRegister({ organizationId, locationId, month });
-  const rows = employeeIds ? register.rows.filter((row) => employeeIds.includes(row.employeeId)) : register.rows;
-  if (rows.length === 0) throw new EmptyDocumentError('इस महीने का कोई attendance record नहीं मिला।');
-  const filtered = employeeIds
-    ? {
-      ...register,
-      rows: rows.map((row, index) => ({ ...row, serial: index + 1 })),
-      totalMandays: rows.reduce((sum, row) => sum + row.totalPresent, 0),
-    }
-    : register;
-  const options = employeeIds ? { filePrefix: `attendance-${slug(rows[0].name)}` } : {};
-  if (format === 'excel') await exportRegisterExcel(filtered, options);
-  else await exportRegisterPdf(filtered, 'download', options);
+  if (downloaded === 0 && lastError) throw lastError;
 }

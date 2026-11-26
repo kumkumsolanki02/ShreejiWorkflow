@@ -126,11 +126,24 @@ const QUESTION_PATTERNS = [
     ],
   },
   {
+    // Before count_locations / payroll — "kitni locations ka payroll ban sakta hai" ≠ download
+    intent: 'count_payroll_locations',
+    confidence: 0.98,
+    entity: null,
+    outputMode: 'count',
+    patterns: [
+      /(?:कितनी|कितने|kitni|kitne|how\s+many|count).{0,40}(?:location|locations|लोकेशन).{0,50}(?:payroll|पेरोल|petrol|patrol).{0,40}(?:ban|बन|sakta|सकता|sakte|सकते|pending|eligible|ready|possible)?/iu,
+      /(?:payroll|पेरोल|petrol|patrol).{0,40}(?:के\s*लिए|ke\s*liye|pending|printable|eligible)?.{0,30}(?:कितनी|कितने|kitni|kitne|how\s+many).{0,30}(?:location|locations|लोकेशन)/iu,
+      /(?:pending|printable|eligible).{0,25}(?:payroll|पेरोल).{0,30}(?:location|locations|लोकेशन)/iu,
+      /(?:location|locations|लोकेशन).{0,25}(?:ka|ki|ke|का|की|के).{0,15}(?:payroll|पेरोल|petrol|patrol).{0,30}(?:ban|बन|sakta|सकता|sakte|सकते|pending)/iu,
+    ],
+  },
+  {
     intent: 'count_locations',
     confidence: 0.97,
     entity: 'organization',
     outputMode: 'count',
-    forbid: ['employee', 'employees', 'कर्मचारी', 'payroll', 'salary', 'attendance', 'slip'],
+    forbid: ['employee', 'employees', 'कर्मचारी', 'payroll', 'salary', 'attendance', 'slip', 'petrol', 'patrol'],
     patterns: [
       /(?:कितने|कितनी|कितना|kitne|kitni|kitna|how\s+many|count|संख्या)\s+(?:active\s+|inactive\s+|deactive\s+)?(?:location|locations|लोकेशन|sites?)/iu,
       /(?:location|locations|लोकेशन|sites?).{0,25}(?:कितने|कितनी|कितना|kitne|kitni|kitna|count|संख्या)\b/iu,
@@ -254,6 +267,8 @@ const QUESTION_PATTERNS = [
     confidence: 0.95,
     entity: 'location',
     outputMode: null,
+    // Count / "ban sakta" questions belong to count_payroll_locations
+    forbid: ['kitne', 'kitni', 'कितने', 'कितनी', 'how many', 'ban sakta', 'ban sakte', 'बन सकता', 'बन सकते'],
     // Require a clear ask — bare "petrol bhi" inside location-details must NOT win
     patterns: [
       /(?:payroll|पेरोल|pay\s*roll|petrol|patrol)\s*(?:दो|दे|do|बताओ|दिखाओ|report|निकालो|generate|चाहिए|chahie|download)/iu,

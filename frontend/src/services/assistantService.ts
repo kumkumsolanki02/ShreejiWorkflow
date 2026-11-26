@@ -9,6 +9,9 @@ export type AssistantDocument = {
   month: string;
   organizationId: string | null;
   locationId: string | null;
+  /** When set (org “all locations”), download loops one file per location for registers/bank. */
+  locationIds?: string[] | null;
+  locationScope?: 'single' | 'all_in_org' | null;
   employeeIds: string[] | null;
   batchId?: string | null;
   reprint?: boolean;
@@ -94,21 +97,20 @@ export async function askAssistant(
     cancel?: boolean;
   },
   signal?: AbortSignal,
-) {
-  const { data } = await api.post<AssistantResponse>('/assistant/chat', {
-    ...input,
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  }, { signal, timeout: 60_000 });
+): Promise<AssistantResponse> {
+  const { data } = await api.post<AssistantResponse>('/assistant/ask', input, { signal });
   return data;
 }
 
 export async function getAssistantSession(sessionId: string) {
-  const { data } = await api.get<{ sessionId: string; messages: AssistantSessionMessage[] }>(`/assistant/session/${sessionId}`);
+  const { data } = await api.get<{ sessionId: string; messages: AssistantSessionMessage[] }>(
+    `/assistant/sessions/${encodeURIComponent(sessionId)}`,
+  );
   return data;
 }
 
 export async function deleteAssistantSession(sessionId: string) {
-  await api.delete(`/assistant/session/${sessionId}`);
+  await api.delete(`/assistant/sessions/${encodeURIComponent(sessionId)}`);
 }
 
 export async function submitAssistantFeedback(input: {
@@ -121,13 +123,15 @@ export async function submitAssistantFeedback(input: {
   correction?: string;
   expectedBehaviour?: string;
 }) {
-  const { data } = await api.post('/assistant/feedback', input);
-  return data as { success: boolean; feedback: { id: string; type: string; status: string } };
+  const { data } = await api.post<{
+    success: boolean;
+    feedback: { id: string; type: string; status: string };
+  }>('/assistant/feedback', input);
+  return data;
 }
 
 export async function listAssistantFeedback(status?: string) {
-  const { data } = await api.get('/assistant/feedback', { params: status ? { status } : undefined });
-  return data as {
+  const { data } = await api.get<{
     success: boolean;
     summary: AssistantFeedbackSummary;
     items: Array<{
@@ -140,10 +144,14 @@ export async function listAssistantFeedback(status?: string) {
       expectedBehaviour: string;
       createdAt: string;
     }>;
-  };
+  }>('/assistant/feedback', { params: status ? { status } : undefined });
+  return data;
 }
 
-export async function reviewAssistantFeedback(id: string, body: { status: 'approved' | 'rejected'; reviewNote?: string }) {
-  const { data } = await api.post(`/assistant/feedback/${id}/review`, body);
+export async function reviewAssistantFeedback(
+  id: string,
+  body: { status: 'approved' | 'rejected'; reviewNote?: string },
+) {
+  const { data } = await api.patch<{ success: boolean }>(`/assistant/feedback/${encodeURIComponent(id)}`, body);
   return data;
 }

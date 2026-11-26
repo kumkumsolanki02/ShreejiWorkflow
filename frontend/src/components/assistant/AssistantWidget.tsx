@@ -12,8 +12,6 @@ import {
 	Stack,
 	Text,
 	Tooltip,
-	Wrap,
-	WrapItem,
 } from '@chakra-ui/react';
 import { keyframes } from '@emotion/react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -122,14 +120,6 @@ const bounce = keyframes`
 `;
 
 const PANEL_HEADER = 'linear-gradient(135deg, #4338CA 0%, #4F46E5 100%)';
-
-const SUGGESTIONS = [
-	'Show all active employees',
-	"Give me today's attendance summary",
-	"Show this month's payroll details",
-	'Generate the attendance register',
-	'Show all organization details',
-];
 
 function storedSessionId() {
 	try {
@@ -730,32 +720,6 @@ function AssistantWidget() {
 										Your personal Admin Assistant for Shreeji Workflow.
 									</Text>
 								</Box>
-								<Text mt={4} mb={2} fontSize="xs" fontWeight="700" color="slate.500" textTransform="uppercase" letterSpacing="wide">
-									Suggested prompts
-								</Text>
-								<Wrap spacing={2}>
-									{SUGGESTIONS.map((suggestion) => (
-										<WrapItem key={suggestion}>
-											<Button
-												size="sm"
-												variant="outline"
-												bg="white"
-												borderColor="brand.100"
-												color="brand.700"
-												fontWeight="600"
-												borderRadius="12px"
-												whiteSpace="normal"
-												textAlign="left"
-												h="auto"
-												py={2}
-												_hover={{ bg: 'brand.50' }}
-												onClick={() => send(suggestion)}
-											>
-												{suggestion}
-											</Button>
-										</WrapItem>
-									))}
-								</Wrap>
 							</Box>
 						) : null}
 
