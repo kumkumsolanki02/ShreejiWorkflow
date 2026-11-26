@@ -1,4 +1,7 @@
-require('dotenv').config();
+const path = require('path');
+// Load backend/.env even when PM2 cwd is the repo root.
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
 const { createApp } = require('./app');
 const { connectDatabase } = require('./config/database');
 const { ensureDefaultMasterData } = require('./services/masterDataService');
@@ -7,7 +10,7 @@ const { getJwtSecret } = require('./services/authService');
 try {
   getJwtSecret();
 } catch {
-  console.error('JWT_SECRET is missing, shorter than 32 characters, or still the example value. Set a random secret in .env.');
+  console.error('JWT_SECRET is missing, shorter than 32 characters, or still the example value. Set a random secret in backend/.env.');
   process.exit(1);
 }
 

@@ -5,7 +5,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const mongoose = require('mongoose');
 const path = require('path');
-const assistantRoutes = require('./routes/assistantRoutes');
+const assistantRoutes = require('./assistant/routes/assistantRoutes');
 const attendanceRoutes = require('./routes/attendanceRoutes');
 const authRoutes = require('./routes/authRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
@@ -17,7 +17,6 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const organizationRoutes = require('./routes/organizationRoutes');
 const settingsRoutes = require('./routes/settingsRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
-const assistantRoutes = require('./assistant/routes/assistantRoutes');
 
 function resolveFrontendDist() {
   if (process.env.FRONTEND_DIST) {
