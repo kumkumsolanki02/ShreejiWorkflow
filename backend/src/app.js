@@ -43,6 +43,11 @@ function createApp() {
   const app = express();
   const frontendDist = resolveFrontendDist();
   const serveFrontend = fs.existsSync(path.join(frontendDist, 'index.html'));
+  if (serveFrontend) {
+    console.log(`Serving frontend from ${frontendDist}`);
+  } else {
+    console.warn(`Frontend build not found at ${frontendDist} (expected index.html). Non-API routes will 404.`);
+  }
   const trustProxyHops = Number.parseInt(process.env.TRUST_PROXY || '', 10);
   if (trustProxyHops > 0) {
     app.set('trust proxy', trustProxyHops);
