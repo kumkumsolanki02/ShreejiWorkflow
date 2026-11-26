@@ -38,7 +38,7 @@ function InvoiceMonthEditor({ periodLabel, draft, isSaved, onChange, onItemChang
 					label="Invoice no."
 					maxLength={60}
 					value={draft.invoiceNumber}
-					helperText={isSaved ? 'Saved number' : 'Next number — changes only if you edit it'}
+					helperText={isSaved ? 'Saved number' : 'Next global number (all orgs & locations) — edit only if needed'}
 					onChange={(event) => onChange({ ...draft, invoiceNumber: event.target.value })}
 				/>
 				<FormInput label="Dated" type="date" value={draft.invoiceDate} onChange={(event) => onChange({ ...draft, invoiceDate: event.target.value })} />
@@ -55,7 +55,7 @@ function InvoiceMonthEditor({ periodLabel, draft, isSaved, onChange, onItemChang
 				<Flex justify="space-between" align="center" mb={3} gap={3} flexWrap="wrap">
 					<Box>
 						<Text fontWeight="700" color="slate.900">Lines for {periodLabel}</Text>
-						<Text fontSize="xs" color="slate.500">Labour rates are calculated from employee wages and Settings → Invoice and cannot be typed. Wages, EPF, ESIC, bonus, overhead and service charge rows take their quantity from attendance.</Text>
+						<Text fontSize="xs" color="slate.500">Labour rates are calculated from employee wages and Settings → Invoice and cannot be typed. Wages, EPF, ESIC, bonus, contractor profit and service charge rows take their quantity from attendance.</Text>
 					</Box>
 					<ActionButton size="sm" tone="neutral" leftIcon={<RepeatIcon />} onClick={onRefill}>
 						Refill from attendance

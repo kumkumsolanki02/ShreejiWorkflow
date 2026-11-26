@@ -6,7 +6,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 /** Values that price an invoice or a wage register; earlier values are kept so old months use old rates. */
 const RATE_FIELDS = {
-	invoice: ['epfRate', 'epfWageCeiling', 'esicRate', 'bonusRate', 'bonusWageCeiling', 'overheadRate', 'serviceChargeRate', 'relievingRate', 'monthDays'],
+	invoice: ['epfRate', 'epfWageCeiling', 'esicRate', 'bonusRate', 'bonusWageCeiling', 'contractorProfitRate', 'serviceChargeRate', 'relievingRate', 'monthDays'],
 	wageRegister: ['bonusRate', 'bonusWageCeiling', 'epfRate', 'epfWageCeiling', 'esiRate', 'esiWageCeiling', 'overtimeHoursPerDay', 'overtimeRateMultiplier'],
 };
 
@@ -106,8 +106,8 @@ const DOCUMENT_FIELDS = {
 		bonusRate: { label: 'Bonus on wages (%)', max: 10, number: { min: 0, max: 100 }, default: '8.33' },
 		bonusWageCeiling: { label: 'Bonus wage ceiling per month', max: 12, number: { min: 0, max: 10000000 }, blankUsesDefault: true, default: '21000' },
 		epfWageCeiling: { label: 'EPF wage ceiling per month', max: 12, number: { min: 0, max: 10000000 }, blankUsesDefault: true, default: '0' },
-		overheadRate: { label: 'Overhead charge (%)', max: 10, number: { min: 0, max: 100 }, blankUsesDefault: true, default: '0' },
-		serviceChargeRate: { label: 'Service charge (%)', max: 10, number: { min: 0, max: 100 }, default: '0' },
+		contractorProfitRate: { label: 'Contractor profit (%)', max: 10, number: { min: 0, max: 100 }, blankUsesDefault: true, default: '6.5' },
+		serviceChargeRate: { label: 'Service charge (%)', max: 10, number: { min: 0, max: 100 }, default: '3.26' },
 		relievingRate: { label: 'Relieving charge (% of rate)', max: 10, number: { min: 0, max: 100 }, default: '16.6667' },
 		monthDays: { label: 'Paid days in a month', max: 3, number: { min: 1, max: 31 }, default: '26' },
 		labourQtyType: { label: 'Labour quantity type', max: 20, options: ['mandays', 'manmonths', 'persons'], default: 'mandays' },
@@ -142,10 +142,27 @@ function publicSettings(key, document) {
 	Object.keys(values).forEach((field) => {
 		if (typeof saved[field] === 'string') values[field] = saved[field];
 	});
+	// Older invoice settings stored contractor profit as overheadRate.
+	if (key === 'invoice' && typeof saved.contractorProfitRate !== 'string' && typeof saved.overheadRate === 'string') {
+		values.contractorProfitRate = saved.overheadRate;
+	}
 	const history = RATE_FIELDS[key]
-		? { rateHistory: (document?.rateHistory || []).map(({ values: old, fromMonth, toMonth, changedAt }) => ({ values: old, fromMonth, toMonth, changedAt })) }
+		? { rateHistory: (document?.rateHistory || []).map(({ values: old, fromMonth, toMonth, changedAt }) => ({
+			values: migrateInvoiceRateValues(old),
+			fromMonth,
+			toMonth,
+			changedAt,
+		})) }
 		: {};
 	return { ...values, ...history, updatedAt: document?.updatedAt || null };
+}
+
+function migrateInvoiceRateValues(old = {}) {
+	const values = { ...(old || {}) };
+	if (typeof values.contractorProfitRate !== 'string' && typeof values.overheadRate === 'string') {
+		values.contractorProfitRate = values.overheadRate;
+	}
+	return values;
 }
 
 function currentMonth() {
@@ -162,10 +179,11 @@ async function getSettingsFor(type, month) {
 	const covering = [...rateHistory].reverse().find((period) => (period.fromMonth || '') <= month && month < period.toMonth);
 	const oldest = [...rateHistory].sort((left, right) => (left.fromMonth || '').localeCompare(right.fromMonth || ''))[0];
 	const period = covering || oldest;
+	const periodValues = key === 'invoice' ? migrateInvoiceRateValues(period.values) : (period.values || {});
 	// An overtime rate missing from a period was never saved before it, so it held its default.
 	const old = Object.fromEntries(RATE_FIELDS[key]
-		.filter((field) => typeof period.values?.[field] === 'string' || DOCUMENT_FIELDS[key][field].blankUsesDefault)
-		.map((field) => [field, typeof period.values?.[field] === 'string' ? period.values[field] : DOCUMENT_FIELDS[key][field].default]));
+		.filter((field) => typeof periodValues?.[field] === 'string' || DOCUMENT_FIELDS[key][field].blankUsesDefault)
+		.map((field) => [field, typeof periodValues?.[field] === 'string' ? periodValues[field] : DOCUMENT_FIELDS[key][field].default]));
 	return { ...current, ...old };
 }
 

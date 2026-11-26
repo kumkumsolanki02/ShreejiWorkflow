@@ -16,6 +16,8 @@ const Location = require('../models/Location');
 const MasterData = require('../models/MasterData');
 const User = require('../models/User');
 const { createToken } = require('../services/authService');
+const { dailySalaryOn, loadSkillPayLookup } = require('../services/salaryService');
+const { PAID_DAY_VALUE, summarizeAttendance } = require('../utils/attendanceStatus');
 
 const ORG_PASSWORD = 'Shreeji@2026';
 const PRICE_LEVELS = [
@@ -28,11 +30,12 @@ const WAGE_LEVELS = [
   ['2025-04', 10, 12.5, 20000, 0.75, 21000], ['2025-07', 12, 12.5, 20000, 1, 25000], ['2025-10', 8.33, 13, 20000, 1, 25000],
   ['2026-01', 9, 13, 25000, 0.75, 25000], ['2026-04', 8.33, 12, 25000, 0.75, 21000], ['2026-08', 8.33, 12, 0, 0.75, 21000],
 ];
-const INVOICE_DEFAULT = { epfRate: 13, esicRate: 3.25, bonusRate: 8.33, serviceChargeRate: 0, relievingRate: 16.6667, monthDays: 26 };
+const INVOICE_DEFAULT = { epfRate: 13, esicRate: 3.25, bonusRate: 8.33, contractorProfitRate: 6.5, serviceChargeRate: 3.26, relievingRate: 16.6667, monthDays: 26 };
+// [from, epf, esic, bonus, serviceCharge, relieving, contractorProfit]
 const INVOICE_LEVELS = [
-  ['2023-12', 13, 4.75, 8.33, 0, 16.6667], ['2024-04', 13, 3.25, 8.33, 0, 16.6667], ['2024-09', 13, 3.25, 10, 2, 16.6667],
-  ['2025-01', 13.5, 3.25, 10, 2, 16.6667], ['2025-04', 13.5, 3.25, 12, 3, 15], ['2025-10', 13, 3.25, 8.33, 3, 16.6667],
-  ['2026-01', 13, 3.5, 9, 2.5, 16.6667], ['2026-06', 13, 3.25, 8.33, 0, 16.6667], ['2026-10', 13, 3.25, 8.33, 1.5, 16.6667],
+  ['2023-12', 13, 4.75, 8.33, 0, 16.6667, 0], ['2024-04', 13, 3.25, 8.33, 0, 16.6667, 0], ['2024-09', 13, 3.25, 10, 2, 16.6667, 0],
+  ['2025-01', 13.5, 3.25, 10, 2, 16.6667, 0], ['2025-04', 13.5, 3.25, 12, 3, 15, 0], ['2025-10', 13, 3.25, 8.33, 3, 16.6667, 0],
+  ['2026-01', 13, 3.5, 9, 2.5, 16.6667, 0], ['2026-06', 13, 3.25, 8.33, 0, 16.6667, 0], ['2026-10', 13, 3.25, 8.33, 3.26, 16.6667, 6.5],
 ];
 const TEST_MONTHS = ['2023-12', '2024-03', '2024-05', '2024-10', '2025-01', '2025-04', '2025-07', '2025-10', '2026-01', '2026-04', '2026-08', '2026-10'];
 
@@ -72,8 +75,8 @@ function wageLevel(month) {
 function invoiceLevel(month) {
   const level = [...INVOICE_LEVELS].reverse().find(([from]) => from <= month);
   if (!level) return INVOICE_DEFAULT;
-  const [, epfRate, esicRate, bonusRate, serviceChargeRate, relievingRate] = level;
-  return { epfRate, esicRate, bonusRate, serviceChargeRate, relievingRate, monthDays: 26 };
+  const [, epfRate, esicRate, bonusRate, serviceChargeRate, relievingRate, contractorProfitRate = 0] = level;
+  return { epfRate, esicRate, bonusRate, serviceChargeRate, relievingRate, contractorProfitRate, monthDays: 26 };
 }
 
 let http;
@@ -130,12 +133,13 @@ class Model {
     return this.employees.filter((employee) => String(employee.locationId) === String(location._id) && sameText(employee.designation, location.designation));
   }
 
-  /** Paid days per employee: present 1, half day 0.5, paid leave 1, at most 26 in each month; nothing on or after a block. */
+  /** Paid days per employee: present 1, half day 0.5, paid leave 1, at most 26 in each month; nothing on or after a block.
+   * `daily` is the man-day-weighted skill price across attendance days in the range (each day priced as of that date). */
   async paidDays(location, fromDate, toDate) {
     const employees = this.locationEmployees(location);
     const records = await Attendance.find({ employeeId: { $in: employees.map(({ _id }) => _id) }, date: { $gte: fromDate, $lte: toDate } }).lean();
     const byEmployee = new Map();
-    for (const employee of employees) byEmployee.set(String(employee._id), { employee, months: new Map(), present: 0, half: 0, has: false });
+    for (const employee of employees) byEmployee.set(String(employee._id), { employee, months: new Map(), monthWages: new Map(), present: 0, half: 0, has: false });
     for (const record of records) {
       const row = byEmployee.get(String(record.employeeId));
       if (row.employee.status === 'disabled' && row.employee.disabledOn && record.date >= row.employee.disabledOn) continue;
@@ -143,10 +147,26 @@ class Model {
       const month = record.date.slice(0, 7);
       const value = { present: 1, half_day: 0.5, paid_leave: 1 }[record.status] || 0;
       row.months.set(month, (row.months.get(month) || 0) + value);
+      if (value > 0) {
+        const wages = row.monthWages.get(month) || { wageSum: 0, valueSum: 0 };
+        wages.wageSum += this.dailyOn(row.employee, record.date) * value;
+        wages.valueSum += value;
+        row.monthWages.set(month, wages);
+      }
       if (record.status === 'present') row.present += 1;
       if (record.status === 'half_day') row.half += 1;
     }
-    for (const row of byEmployee.values()) row.paid = r2([...row.months.values()].reduce((sum, days) => sum + Math.min(26, days), 0));
+    for (const row of byEmployee.values()) {
+      row.paid = r2([...row.months.values()].reduce((sum, days) => sum + Math.min(26, days), 0));
+      let gross = 0;
+      for (const [month, days] of row.months) {
+        const capped = Math.min(26, days);
+        const wages = row.monthWages.get(month);
+        if (!wages || wages.valueSum <= 0 || capped <= 0) continue;
+        gross += wages.wageSum * (capped / wages.valueSum);
+      }
+      row.daily = row.paid > 0 ? r2(gross / row.paid) : this.dailyOn(row.employee, toDate);
+    }
     return byEmployee;
   }
 }
@@ -186,7 +206,7 @@ async function testOldMonthRates(model, admin) {
       let lineErrors = [];
       for (const line of pay.data.lines) {
         const row = expected.get(line.employeeId);
-        const daily = model.dailyOn(row.employee, toDate);
+        const daily = row.daily;
         const want = expectedRow(daily, row.paid, row.employee, rates);
         if (!near(line.dailySalary, daily)) lineErrors.push(`${line.employeeName} daily ${line.dailySalary}≠${daily}`);
         if (!near(line.paidDays, row.paid)) lineErrors.push(`${line.employeeName} paid ${line.paidDays}≠${row.paid}`);
@@ -196,7 +216,7 @@ async function testOldMonthRates(model, admin) {
       }
       const withAttendance = [...expected.values()].filter((row) => row.has).length;
       check(`${tag}: payroll lists every employee with attendance (${withAttendance})`, pay.data.lines.length === withAttendance, pay.data.lines.length);
-      check(`${tag}: payroll daily wage = skill price of the month, paid days and deductions correct`, lineErrors.length === 0, lineErrors.slice(0, 3).join('; '));
+      check(`${tag}: payroll daily wage = skill price of each day, paid days and deductions correct`, lineErrors.length === 0, lineErrors.slice(0, 3).join('; '));
 
       const register = await call('GET', '/attendance/wage-register', { cookie: admin, query: { ...ids, month } });
       check(`${tag}: wage register uses that month's rates`, register.status === 200 && ratesMatch(register.data.rates, rates), JSON.stringify(register.data.rates || register.data));
@@ -204,7 +224,7 @@ async function testOldMonthRates(model, admin) {
         lineErrors = [];
         for (const row of register.data.rows) {
           const model_ = expected.get(row.employeeId);
-          const want = expectedRow(model.dailyOn(model_.employee, toDate), model_.paid, model_.employee, rates);
+          const want = expectedRow(model_.daily, model_.paid, model_.employee, rates);
           if (row.grossPayment !== want.net || row.epf !== want.epf || row.esi !== want.esi || !near(row.bonus, want.bonus)) lineErrors.push(`${row.employeeName} ${row.bonus}/${row.epf}/${row.esi}/${row.grossPayment}≠${want.bonus}/${want.epf}/${want.esi}/${want.net}`);
         }
         check(`${tag}: FORM XVII rows (bonus, EPF, ESI, net)`, lineErrors.length === 0, lineErrors.slice(0, 3).join('; '));
@@ -232,7 +252,7 @@ async function testOldMonthRates(model, admin) {
   const oldRegister = await call('GET', '/attendance/wage-register', { cookie: admin, query: { ...ids, month: '2021-11' } });
   check('Nov 2021 wage register answers', oldRegister.status === 200, oldRegister.status);
   const oldInvoice = await call('GET', `/organizations/${ids.organizationId}/locations/${ids.locationId}/invoices/preview`, { cookie: admin, query: { month: '2021-11' } });
-  check('Nov 2021 invoice preview uses default % (before the first change)', oldInvoice.status === 200 && near(oldInvoice.data.settings.esicRate, 3.25) && near(oldInvoice.data.settings.serviceChargeRate, 0), JSON.stringify(oldInvoice.data.settings || oldInvoice.data).slice(0, 300));
+  check('Nov 2021 invoice preview uses default % (before the first change)', oldInvoice.status === 200 && near(oldInvoice.data.settings.esicRate, 3.25) && near(oldInvoice.data.settings.serviceChargeRate, 3.26) && near(oldInvoice.data.settings.contractorProfitRate, 6.5), JSON.stringify(oldInvoice.data.settings || oldInvoice.data).slice(0, 300));
 }
 
 async function testInvoices(model, admin) {
@@ -256,17 +276,17 @@ async function testInvoices(model, admin) {
       categories.forEach((category, index) => {
         const group = working.filter((row) => row.employee.skillCategory === category);
         const manDays = group.reduce((sum, row) => sum + row.paid, 0);
-        const wage = r2(group.reduce((sum, row) => sum + model.dailyOn(row.employee, lastDay(month)) * row.paid, 0) / manDays);
+        const wage = r2(group.reduce((sum, row) => sum + row.daily * row.paid, 0) / manDays);
         const monthly = labour[index]?.qtySource !== 'mandays';
-        const rate = r2(wage * (monthly ? 26 : 1) * (1 + loading) * (1 + rules.serviceChargeRate / 100));
+        const rate = r2(wage * (monthly ? 26 : 1) * (1 + loading) * (1 + rules.contractorProfitRate / 100) * (1 + rules.serviceChargeRate / 100));
         if (!labour[index] || !near(labour[index].rate, rate)) errors.push(`${category}: ${labour[index]?.rate} ≠ ${rate}`);
       });
-      check(`${tag}: labour rate = month's wage × (1 + EPF + ESIC + bonus) × (1 + service)`, errors.length === 0 && labour.length === categories.length, errors.join('; ') || `${labour.length} lines for ${categories.length} categories`);
+      check(`${tag}: labour rate = day-priced wage × (1 + EPF + ESIC + bonus) × (1 + contractor profit) × (1 + service)`, errors.length === 0 && labour.length === categories.length, errors.join('; ') || `${labour.length} lines for ${categories.length} categories`);
       const relieving = preview.data.items.find((item) => item.rateSource === 'relieving');
       if (relieving && working.length) {
         const manDays = working.reduce((sum, row) => sum + row.paid, 0);
-        const wageAll = r2(working.reduce((sum, row) => sum + model.dailyOn(row.employee, lastDay(month)) * row.paid, 0) / manDays);
-        const perDay = r2(wageAll * (1 + loading) * (1 + rules.serviceChargeRate / 100));
+        const wageAll = r2(working.reduce((sum, row) => sum + row.daily * row.paid, 0) / manDays);
+        const perDay = r2(wageAll * (1 + loading) * (1 + rules.contractorProfitRate / 100) * (1 + rules.serviceChargeRate / 100));
         const want = r2(perDay * rules.relievingRate / 100);
         check(`${tag}: relieving charge = ${rules.relievingRate}% of the month's per-day rate`, near(relieving.rate, want, 0.02), `${relieving.rate} vs ${want}`);
       }
@@ -280,11 +300,13 @@ async function testInvoices(model, admin) {
   const saved = await ClientInvoice.find({}).lean();
   check('90 seeded invoices saved (Jun 2024, Jun 2025, Jun 2026 × 30 locations)', saved.length >= 90, saved.length);
   check('Invoice numbers are unique', new Set(saved.map((invoice) => invoice.invoiceNumber)).size === saved.length);
-  const byFy = new Map();
-  for (const invoice of saved) byFy.set(invoice.financialYear, [...(byFy.get(invoice.financialYear) || []), invoice.invoiceSeq]);
-  for (const [fy, seqs] of byFy) {
+  const byYear = new Map();
+  for (const invoice of saved) {
+    byYear.set(invoice.financialYear, [...(byYear.get(invoice.financialYear) || []), invoice.invoiceSeq]);
+  }
+  for (const [year, seqs] of byYear) {
     const sorted = [...seqs].sort((a, b) => a - b);
-    check(`Financial year ${fy}: invoice numbers run 1..${sorted.length} without gaps`, sorted.every((seq, index) => seq === index + 1), sorted.join(','));
+    check(`Year ${year}: invoice numbers run 1..${sorted.length} without gaps`, sorted.every((seq, index) => seq === index + 1), sorted.join(','));
   }
   for (const invoice of saved.filter((_, index) => index % 6 === 0)) {
     const preview = await call('GET', `/organizations/${invoice.organizationId}/locations/${invoice.locationId}/invoices/preview`, { cookie: admin, query: { month: invoice.month } });
@@ -412,9 +434,26 @@ async function testChangesToday(model, admin) {
     const fresh = await call('GET', `/employees/${employee._id}`, { cookie: admin });
     const newBasic = raised.find((rate) => sameText(rate.governmentType, organization.governmentType) && sameText(rate.area, organization.area)).salary;
     check(`${employee.name}'s profile shows the new basic pay`, near(fresh.data.employee?.basicPay ?? fresh.data.basicPay, newBasic), JSON.stringify(fresh.data).slice(0, 150));
-    const nowPay = await call('GET', '/attendance/payroll', { cookie: admin, query: { ...empIds, fromDate: `${thisMonth}-01`, toDate: lastDay(thisMonth) } });
+    const nowFrom = `${thisMonth}-01`;
+    const nowTo = lastDay(thisMonth);
+    const nowPay = await call('GET', '/attendance/payroll', { cookie: admin, query: { ...empIds, fromDate: nowFrom, toDate: nowTo } });
     const nowLine = nowPay.data.lines.find((line) => line.employeeId === String(employee._id));
-    check(`This month's payroll of ${employee.name} uses the new price`, nowLine && near(nowLine.basicPay, newBasic), `${nowLine?.basicPay} vs ${newBasic}`);
+    const freshEmployee = await Employee.findById(employee._id).lean();
+    const skillLookup = await loadSkillPayLookup([freshEmployee]);
+    const today = todayIndia();
+    check(`New Un-skilled price applies from today (${today})`, near(dailySalaryOn(freshEmployee, today, skillLookup), Number(freshEmployee.dailySalary) || 0), dailySalaryOn(freshEmployee, today, skillLookup));
+    const monthRecords = await Attendance.find({ employeeId: employee._id, date: { $gte: nowFrom, $lte: nowTo } }).lean();
+    const monthPaid = summarizeAttendance(monthRecords.map((record) => record.status), 0).paidDays;
+    let wageSum = 0;
+    let valueSum = 0;
+    for (const record of monthRecords) {
+      const value = PAID_DAY_VALUE[record.status] || 0;
+      if (value <= 0) continue;
+      wageSum += dailySalaryOn(freshEmployee, record.date, skillLookup) * value;
+      valueSum += value;
+    }
+    const wantDaily = monthPaid > 0 && valueSum > 0 ? r2((wageSum * (monthPaid / valueSum)) / monthPaid) : Number(freshEmployee.dailySalary) || 0;
+    check(`This month's payroll of ${employee.name} uses each day's skill price (new from today)`, nowLine && near(nowLine.dailySalary, wantDaily), `${nowLine?.dailySalary} vs ${wantDaily}`);
     const reopened = await call('GET', `/organizations/${savedInvoice.organizationId}/locations/${savedInvoice.locationId}/invoices/preview`, { cookie: admin, query: { month: '2026-06' } });
     check('Saved Jun 2026 invoice is unchanged after the changes', reopened.data.invoice?.netPayable === savedInvoice.netPayable, `${reopened.data.invoice?.netPayable} vs ${savedInvoice.netPayable}`);
   } finally {
@@ -428,10 +467,16 @@ async function testChangesToday(model, admin) {
   const employee = model.employees.find((item) => item.status === 'active');
   const empLocation = model.locations.find((item) => String(item._id) === String(employee.locationId));
   const empIds = { organizationId: String(employee.organizationId), locationId: String(empLocation._id) };
-  for (const [fromDate, toDate, label] of [['2026-09-01', '2026-09-15', '1–15 Sep (old price)'], ['2026-09-16', '2026-09-30', '16–30 Sep (new price)'], ['2026-09-01', '2026-09-30', 'whole Sep (price on the last day)']]) {
+  for (const [fromDate, toDate, label] of [
+    ['2026-09-01', '2026-09-15', '1–15 Sep (old price)'],
+    ['2026-09-16', '2026-09-30', '16–30 Sep (new price)'],
+    ['2026-09-01', '2026-09-30', 'whole Sep (day-weighted old + new)'],
+  ]) {
     const pay = await call('GET', '/attendance/payroll', { cookie: admin, query: { ...empIds, fromDate, toDate } });
     const line = pay.data.lines.find((item) => item.employeeId === String(employee._id));
-    check(`${label}: daily wage ${model.dailyOn(employee, toDate)}`, line && near(line.dailySalary, model.dailyOn(employee, toDate)), line?.dailySalary);
+    const expected = await model.paidDays(empLocation, fromDate, toDate);
+    const want = expected.get(String(employee._id))?.daily;
+    check(`${label}: daily wage ${want}`, line && want != null && near(line.dailySalary, want), line?.dailySalary);
   }
 }
 
@@ -581,11 +626,11 @@ async function testDashboard(model, admin, orgCookies) {
       for (const row of (await model.paidDays(location, fromDate, toDate)).values()) {
         if (!row.has) continue;
         paid += row.paid;
-        wages += r2(model.dailyOn(row.employee, toDate) * row.paid);
+        wages += r2(row.daily * row.paid);
       }
     }
     check(`Paid days in October = ${r2(paid)}`, near(period.paidDays, paid, 0.05), period.paidDays);
-    check(`Wages in October = ${r2(wages)} (October skill prices)`, near(period.wages?.[0]?.total, wages, 0.5), JSON.stringify(period.wages));
+    check(`Wages in October = ${r2(wages)} (day-priced skill rates)`, near(period.wages?.[0]?.total, wages, 0.5), JSON.stringify(period.wages));
     check('Trend has one point per day', summary.data.trend.length === 31, summary.data.trend.length);
     check('Breakdown by skill category covers all active employees', summary.data.bySkillCategory.reduce((sum, item) => sum + item.value, 0) === active, JSON.stringify(summary.data.bySkillCategory));
   }

@@ -28,7 +28,7 @@ function InvoiceSettingsPanel() {
 				<PaperPreview label="Live preview" fontFamily="Arial, Helvetica, sans-serif">
 					<Text textAlign="center" fontWeight="800" fontSize="sm" textDecoration="underline">{values.title || 'INVOICE BREAKUP'}</Text>
 					<Text mt={1} textAlign="center" fontWeight="700" fontSize="8.5px" textDecoration="underline">
-						Invoice No. {values.invoicePrefix}/26-27/{values.startNumber || '1'} Dated-16-10-2026 ( RA BILL NO.- 12 )
+						Invoice No. {values.invoicePrefix}/26/{String(values.startNumber || '1').padStart(2, '0')} Dated-16-10-2026 ( RA BILL NO.- 12 )
 					</Text>
 					<Text mt={2} fontWeight="700" fontSize="8.5px">
 						Name of Party :- {values.partyName}{values.vendorCode ? ` Vendor Code:- ${values.vendorCode}` : ''}
@@ -54,14 +54,14 @@ function InvoiceSettingsPanel() {
 				<FormInput label="Name of party" isRequired maxLength={200} value={values.partyName} onChange={(event) => setField('partyName', event.target.value)} />
 				<SimpleGrid columns={{ base: 1, sm: 3 }} spacing={4}>
 					<FormInput label="Vendor code" maxLength={40} value={values.vendorCode} helperText="A location can override it." onChange={(event) => setField('vendorCode', event.target.value)} />
-					<FormInput label="Invoice prefix" isRequired maxLength={30} value={values.invoicePrefix} helperText="e.g. AMC → AMC/26-27/465" onChange={(event) => setField('invoicePrefix', event.target.value)} />
-					<FormInput label="First number of the year" type="number" min={1} maxLength={8} value={values.startNumber} helperText="Used when a financial year has no invoice yet." onChange={(event) => setField('startNumber', event.target.value)} />
+					<FormInput label="Invoice prefix" isRequired maxLength={30} value={values.invoicePrefix} helperText="e.g. AMC → AMC/26/01" onChange={(event) => setField('invoicePrefix', event.target.value)} />
+					<FormInput label="First number of the year" type="number" min={1} maxLength={8} value={values.startNumber} helperText="One global series for the calendar year (AMC/26/01, 02, 03…) across every organization and location." onChange={(event) => setField('startNumber', event.target.value)} />
 				</SimpleGrid>
 			</FormSection>
 			<FormSection title="Rate calculation">
 				<Text fontSize="xs" color="slate.500">
-					Wages + EPF + ESIC + bonus, then overhead on that, then service charge on the lot. Month lines use daily wage × paid days in a month.
-					With the itemised breakup on (Invoice setup), each part prints as its own row.
+					Wages + EPF + ESIC + bonus, then contractor profit on that base, then service charge on the lot. Month lines use daily wage × paid days in a month.
+					Each location picks its table format in Invoice setup (itemised, statutory-in-description, or all-inclusive).
 				</Text>
 				<SimpleGrid columns={{ base: 1, sm: 3 }} spacing={4}>
 					<FormInput label="EPF / EDLI (%)" type="number" min={0} max={100} step="0.01" value={values.epfRate} onChange={(event) => setField('epfRate', event.target.value)} />
@@ -69,8 +69,8 @@ function InvoiceSettingsPanel() {
 					<FormInput label="ESIC (%)" type="number" min={0} max={100} step="0.01" value={values.esicRate} onChange={(event) => setField('esicRate', event.target.value)} />
 					<FormInput label="Bonus (%)" type="number" min={0} max={100} step="0.01" value={values.bonusRate} onChange={(event) => setField('bonusRate', event.target.value)} />
 					<FormInput label="Bonus wage ceiling per month" type="number" min={0} step="1" value={values.bonusWageCeiling} helperText="e.g. 21000. 0 = no ceiling." onChange={(event) => setField('bonusWageCeiling', event.target.value)} />
-					<FormInput label="Overhead charge (%)" type="number" min={0} max={100} step="0.01" value={values.overheadRate} onChange={(event) => setField('overheadRate', event.target.value)} />
-					<FormInput label="Service charge (%)" type="number" min={0} max={100} step="0.01" value={values.serviceChargeRate} onChange={(event) => setField('serviceChargeRate', event.target.value)} />
+					<FormInput label="Contractor profit (%)" type="number" min={0} max={100} step="0.01" value={values.contractorProfitRate} helperText="On wages + EPF + ESIC + bonus. Default 6.5%." onChange={(event) => setField('contractorProfitRate', event.target.value)} />
+					<FormInput label="Service charge (%)" type="number" min={0} max={100} step="0.01" value={values.serviceChargeRate} helperText="On wages + EPF + ESIC + bonus + contractor profit. Default 3.26%." onChange={(event) => setField('serviceChargeRate', event.target.value)} />
 					<FormInput label="Relieving charge (% of rate)" type="number" min={0} max={100} step="0.0001" value={values.relievingRate} helperText="16.6667 = one sixth" onChange={(event) => setField('relievingRate', event.target.value)} />
 					<FormInput label="Paid days in a month" type="number" min={1} max={31} value={values.monthDays} onChange={(event) => setField('monthDays', event.target.value)} />
 				</SimpleGrid>
@@ -92,7 +92,7 @@ function InvoiceSettingsPanel() {
 				/>
 				<RateHistoryList
 					history={settings.rateHistory}
-					describe={(old) => `EPF ${old.epfRate}%${Number(old.epfWageCeiling) ? ` (ceiling ${old.epfWageCeiling})` : ''} · ESIC ${old.esicRate}% · Bonus ${old.bonusRate}%${Number(old.bonusWageCeiling) ? ` (ceiling ${old.bonusWageCeiling})` : ''} · Overhead ${old.overheadRate || '0'}% · Service ${old.serviceChargeRate}% · Relieving ${old.relievingRate}% · ${old.monthDays} days`}
+					describe={(old) => `EPF ${old.epfRate}%${Number(old.epfWageCeiling) ? ` (ceiling ${old.epfWageCeiling})` : ''} · ESIC ${old.esicRate}% · Bonus ${old.bonusRate}%${Number(old.bonusWageCeiling) ? ` (ceiling ${old.bonusWageCeiling})` : ''} · Contractor profit ${old.contractorProfitRate || old.overheadRate || '0'}% · Service ${old.serviceChargeRate}% · Relieving ${old.relievingRate}% · ${old.monthDays} days`}
 				/>
 			</FormSection>
 			<FormSection title="Signature">

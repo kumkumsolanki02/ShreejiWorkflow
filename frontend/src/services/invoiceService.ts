@@ -11,6 +11,28 @@ export const LABOUR_QTY_OPTIONS: { value: LabourQtySource; label: string; hint: 
 ];
 export type InvoiceSection = 'service' | 'supply';
 export type RateSource = 'auto' | 'relieving' | 'fixed';
+export type LabourLayout = 'itemised' | 'statutory' | 'inclusive';
+
+export const LABOUR_LAYOUT_OPTIONS: { value: LabourLayout; label: string; sample: string; hint: string }[] = [
+	{
+		value: 'itemised',
+		label: 'Itemised breakup',
+		sample: 'Betul / Electrical',
+		hint: 'Separate rows for wages, EPF, ESIC, bonus, contractor profit and service charge for each skill.',
+	},
+	{
+		value: 'statutory',
+		label: 'Statutory in description',
+		sample: 'Magarwada / Guest house',
+		hint: 'One labour line per skill. Rate = wages + EPF + ESIC + bonus. Percentages are written in the description. Add relieving as extra lines.',
+	},
+	{
+		value: 'inclusive',
+		label: 'All-inclusive statutory',
+		sample: 'Rangpo / Horticulture',
+		hint: 'One labour line per skill with “Including all total Statutory Wages”. Rate includes EPF, ESIC, bonus, contractor profit and service charge.',
+	},
+];
 
 export type InvoiceSetupItem = {
 	description: string;
@@ -41,7 +63,14 @@ export type InvoiceSetup = {
 	gstRate: number;
 	firstRaBillNo: number;
 	autoLabour: boolean;
-	/** Labour lines printed as separate wage, EPF, ESIC, bonus, overhead and service charge rows. */
+	/**
+	 * Per-location labour table format:
+	 * - itemised: separate wage / EPF / ESIC / bonus / contractor profit / service rows
+	 * - statutory: one line with EPF/ESIC/Bonus named in the description
+	 * - inclusive: one all-in rate "Including all total Statutory Wages"
+	 */
+	labourLayout: LabourLayout;
+	/** @deprecated Prefer labourLayout. Still returned for older clients. */
 	rateBreakup: boolean;
 	labourQtyType: LabourQtySource | '';
 	items: InvoiceSetupItem[];
@@ -54,14 +83,15 @@ export type InvoiceSetup = {
 
 export type InvoiceSetupInput = Omit<InvoiceSetup, 'saved' | 'defaultLabourQty' | 'defaultVendorCode' | 'defaultWorkTitle' | 'defaultLoaNumber' | 'defaultSapPo'>;
 
-export type InvoiceComponent = '' | 'wage' | 'epf' | 'esic' | 'bonus' | 'overhead' | 'service';
+export type InvoiceComponent = '' | 'wage' | 'epf' | 'esic' | 'bonus' | 'contractorProfit' | 'overhead' | 'service';
 
 export const COMPONENT_LABELS: Record<Exclude<InvoiceComponent, ''>, string> = {
 	wage: 'Wages',
 	epf: 'EPF / EDLI',
 	esic: 'ESIC',
 	bonus: 'Bonus',
-	overhead: 'Overhead',
+	contractorProfit: 'Contractor profit',
+	overhead: 'Contractor profit',
 	service: 'Service charge',
 };
 

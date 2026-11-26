@@ -9,7 +9,7 @@ const { countsAttendanceOn } = require('../utils/employeeStatus');
 const { httpError } = require('../utils/httpError');
 const { escapeRegex } = require('../utils/validation');
 const { getSettingsFor } = require('./documentSettingsService');
-const { withSkillPayOn } = require('./salaryService');
+const { dailySalaryOn, loadSkillPayLookup } = require('./salaryService');
 
 const PAYROLL_PAGE_SIZE = 10;
 const MAX_PAYROLL_PAGE_SIZE = 100;
@@ -63,15 +63,49 @@ async function resolveOrganizationId(user, requestedId) {
   return organization.id;
 }
 
+function dayStatus(day) {
+  return typeof day === 'string' ? day : day.status;
+}
+
+function dayDate(day) {
+  return typeof day === 'string' ? '' : (day.date || '');
+}
+
 /** Attendance totals over a period, summed month by month so each month pays at most 26 days. */
 function monthlyAttendance(statusesByMonth = new Map()) {
   const total = { presentDays: 0, absentDays: 0, halfDays: 0, paidLeaves: 0, otherLeaves: 0, paidDays: 0 };
-  for (const statuses of statusesByMonth.values()) {
-    const counts = summarizeAttendance(statuses, 0);
+  for (const days of statusesByMonth.values()) {
+    const counts = summarizeAttendance(days.map(dayStatus), 0);
     for (const key of Object.keys(total)) total[key] += counts[key];
   }
   total.paidDays = Math.round((total.paidDays + Number.EPSILON) * 100) / 100;
   return total;
+}
+
+/**
+ * Man-day-weighted daily wage and gross pay for one employee: each paid attendance day uses the category-of-skill
+ * price that applied on that calendar day. When a month is capped at 26 paid days, wages scale in the same ratio.
+ */
+function paidWageForEmployee(employee, attendanceByMonth, skillLookup) {
+  const counts = monthlyAttendance(attendanceByMonth);
+  let grossPay = 0;
+  for (const days of (attendanceByMonth || new Map()).values()) {
+    const monthPaid = summarizeAttendance(days.map(dayStatus), 0).paidDays;
+    let wageSum = 0;
+    let valueSum = 0;
+    for (const day of days) {
+      const value = PAID_DAY_VALUE[dayStatus(day)] || 0;
+      if (value <= 0) continue;
+      valueSum += value;
+      wageSum += dailySalaryOn(employee, dayDate(day), skillLookup) * value;
+    }
+    if (valueSum > 0 && monthPaid > 0) grossPay += wageSum * (monthPaid / valueSum);
+  }
+  grossPay = round2(grossPay);
+  const dailySalary = counts.paidDays > 0
+    ? round2(grossPay / counts.paidDays)
+    : (Number(employee.dailySalary) || 0);
+  return { counts, dailySalary, grossPay };
 }
 
 /** Overtime hours entered on the wage register for each employee, summed over the months the period touches. */
@@ -98,22 +132,29 @@ function buildAttendanceByEmployee(attendance, employeesById) {
     const byMonth = attendanceByEmployee.get(employeeId) || new Map();
     const month = String(record.date || '').slice(0, 7);
     if (!byMonth.has(month)) byMonth.set(month, []);
-    byMonth.get(month).push(isAttendanceStatus(record.status) ? record.status : 'absent');
+    byMonth.get(month).push({
+      date: record.date,
+      status: isAttendanceStatus(record.status) ? record.status : 'absent',
+    });
     attendanceByEmployee.set(employeeId, byMonth);
   }
   return attendanceByEmployee;
 }
 
-function payrollLinesForEmployees(user, employees, attendanceByEmployee, overtimeHours, organizationDetailsById, wageRatesOption) {
+function payrollLinesForEmployees(user, employees, attendanceByEmployee, overtimeHours, organizationDetailsById, wageRatesOption, skillLookup = null) {
   return employees
     .filter((employee) => employee.status !== 'disabled' || attendanceByEmployee.has(String(employee._id)))
     .map((employee) => {
-      const counts = monthlyAttendance(attendanceByEmployee.get(String(employee._id)));
+      const { counts, dailySalary, grossPay } = paidWageForEmployee(
+        employee,
+        attendanceByEmployee.get(String(employee._id)),
+        skillLookup,
+      );
       const { paidDays } = counts;
-      const dailySalary = Number(employee.dailySalary) || 0;
       const currency = !employee.currency || employee.currency === 'NRI' ? 'INR' : employee.currency;
-      const grossPay = Math.round((dailySalary * paidDays + Number.EPSILON) * 100) / 100;
       const organization = organizationDetailsById.get(String(employee.organizationId)) || {};
+      const basicDelta = dailySalary - (Number(employee.dailySalary) || 0);
+      const basicPay = Math.round(((Number(employee.basicPay) || 0) + basicDelta) * 100) / 100;
       return {
         employeeId: String(employee._id),
         employeeName: employee.name,
@@ -134,7 +175,7 @@ function payrollLinesForEmployees(user, employees, attendanceByEmployee, overtim
         designation: employee.designation || '',
         skillCategory: employee.skillCategory || '',
         parentName: employee.parentName || '',
-        basicPay: Number(employee.basicPay) || 0,
+        basicPay,
         dearnessAllowance: Number(employee.dearnessAllowance) || 0,
         epfoApplicable: Boolean(employee.epfoApplicable),
         esicApplicable: Boolean(employee.esicApplicable),
@@ -207,7 +248,7 @@ async function calculatePayroll(user, options = {}) {
       organizationsPromise,
     ]);
     attendance = locationAttendance;
-    employees = await withSkillPayOn(locationEmployees, toDate);
+    employees = locationEmployees;
     for (const organization of organizations) organizationDetailsById.set(String(organization._id), organization);
   } else {
     const attendanceFilter = { date: { $gte: fromDate, $lte: toDate } };
@@ -226,7 +267,7 @@ async function calculatePayroll(user, options = {}) {
     const attendanceEmployeeIds = [...new Set(attendance.map(({ employeeId }) => String(employeeId)))];
     const employeeConditions = organizationId ? [{ organizationId }] : [{ organizationId: { $ne: null } }];
     if (attendanceEmployeeIds.length > 0) employeeConditions.push({ _id: { $in: attendanceEmployeeIds } });
-    employees = await withSkillPayOn(await leanQuery(Employee.find({ $or: employeeConditions }), EMPLOYEE_PAYROLL_SELECT), toDate);
+    employees = await leanQuery(Employee.find({ $or: employeeConditions }), EMPLOYEE_PAYROLL_SELECT);
     for (const organization of organizations) organizationDetailsById.set(String(organization._id), organization);
   }
 
@@ -235,7 +276,10 @@ async function calculatePayroll(user, options = {}) {
   const payableEmployees = employees.filter((employee) => (
     employee.status !== 'disabled' || attendanceByEmployee.has(String(employee._id))
   ));
-  const overtimeHours = await overtimeHoursByEmployee(payableEmployees, organizationId, fromDate, toDate);
+  const [overtimeHours, skillLookup] = await Promise.all([
+    overtimeHoursByEmployee(payableEmployees, organizationId, fromDate, toDate),
+    loadSkillPayLookup(payableEmployees),
+  ]);
   const lines = payrollLinesForEmployees(
     user,
     payableEmployees,
@@ -243,6 +287,7 @@ async function calculatePayroll(user, options = {}) {
     overtimeHours,
     organizationDetailsById,
     options.wageRates,
+    skillLookup,
   );
 
   const selectedIds = parseEmployeeIds(options.employeeIds);
@@ -329,21 +374,17 @@ async function calculatePayrollForLocations(user, locations, fromDate, toDate, o
     employeesByLocation.get(locationId).push(employee);
   }
 
-  const matchedEmployees = [...employeesByLocation.values()].flat();
-  const employees = await withSkillPayOn(matchedEmployees, toDate);
+  const employees = [...employeesByLocation.values()].flat();
   const employeesById = new Map(employees.map((employee) => [String(employee._id), employee]));
-  const employeesByLocationResolved = new Map(locations.map((location) => [String(location._id), []]));
-  for (const employee of employees) {
-    const locationId = String(employee.locationId || '');
-    if (employeesByLocationResolved.has(locationId)) employeesByLocationResolved.get(locationId).push(employee);
-  }
-
-  const overtimeHours = await overtimeHoursByEmployee(employees, null, fromDate, toDate);
+  const [overtimeHours, skillLookup] = await Promise.all([
+    overtimeHoursByEmployee(employees, null, fromDate, toDate),
+    loadSkillPayLookup(employees),
+  ]);
   const attendanceByEmployeeAll = buildAttendanceByEmployee(attendance, employeesById);
 
   for (const location of locations) {
     const locationId = String(location._id);
-    const locationEmployees = employeesByLocationResolved.get(locationId) || [];
+    const locationEmployees = employeesByLocation.get(locationId) || [];
     const locationEmployeeIds = new Set(locationEmployees.map((employee) => String(employee._id)));
     const attendanceByEmployee = new Map();
     for (const [employeeId, byMonth] of attendanceByEmployeeAll) {
@@ -356,6 +397,7 @@ async function calculatePayrollForLocations(user, locations, fromDate, toDate, o
       overtimeHours,
       organizationDetailsById,
       options.wageRates,
+      skillLookup,
     );
     if (options.attendanceOnly) {
       lines = lines.filter((line) => attendanceByEmployee.has(line.employeeId));

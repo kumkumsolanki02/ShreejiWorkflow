@@ -63,29 +63,54 @@ function skillBasicOn(skillItem, governmentType, area, date) {
 }
 
 /**
+ * Loads category-of-skill rate history and organization schedules for the given employees, so payroll can price
+ * each attendance day with the rate that applied on that day.
+ */
+async function loadSkillPayLookup(employees) {
+	const codes = [...new Set(employees.map((employee) => String(employee.skillCategory || '').trim().toLowerCase()).filter(Boolean))];
+	const organizationIds = [...new Set(employees.map((employee) => String(employee.organizationId || '')).filter(Boolean))];
+	if (codes.length === 0 || organizationIds.length === 0) return null;
+	const [skills, organizations] = await Promise.all([
+		MasterData.find({ type: 'skillCategory', code: { $in: codes } }).select('code rates effectiveFrom rateHistory').lean(),
+		User.find({ _id: { $in: organizationIds }, role: 'organization' }).select('governmentType area').lean(),
+	]);
+	if (skills.length === 0) return null;
+	return {
+		skillByCode: new Map(skills.map((skill) => [skill.code, skill])),
+		organizationById: new Map(organizations.map((organization) => [String(organization._id), organization])),
+	};
+}
+
+/**
+ * Daily wage of an employee on `date` (YYYY-MM-DD): auto-linked category-of-skill pay uses the rate valid that
+ * day (keeping DA and allowances); a basic pay that is not today's skill rate was set by hand and is left alone.
+ */
+function dailySalaryOn(employee, date, lookup) {
+	const current = Number(employee.dailySalary) || 0;
+	if (!lookup || !date) return current;
+	const skill = lookup.skillByCode.get(String(employee.skillCategory || '').trim().toLowerCase());
+	const organization = lookup.organizationById.get(String(employee.organizationId || ''));
+	if (!skill || !organization?.governmentType || !organization?.area) return current;
+	const today = skillBasicOn(skill, organization.governmentType, organization.area, '9999-12-31');
+	const then = skillBasicOn(skill, organization.governmentType, organization.area, date);
+	if (then === null || today === null || Number(employee.basicPay) !== today || then === today) return current;
+	return Math.round((current - today + then) * 100) / 100;
+}
+
+/**
  * Employees as they were paid on `date`: their basic pay always holds today's category of skill rate, so it is
  * swapped for the rate valid on `date`, keeping their own DA and allowances. Employees with a basic pay that is not
  * today's skill rate were set by hand and are left as they are.
  */
 async function withSkillPayOn(employees, date) {
-	const codes = [...new Set(employees.map((employee) => String(employee.skillCategory || '').trim().toLowerCase()).filter(Boolean))];
-	const organizationIds = [...new Set(employees.map((employee) => String(employee.organizationId || '')).filter(Boolean))];
-	if (!date || codes.length === 0 || organizationIds.length === 0) return employees;
-	const [skills, organizations] = await Promise.all([
-		MasterData.find({ type: 'skillCategory', code: { $in: codes }, effectiveFrom: { $gt: date } }).select('code rates effectiveFrom rateHistory').lean(),
-		User.find({ _id: { $in: organizationIds }, role: 'organization' }).select('governmentType area').lean(),
-	]);
-	if (skills.length === 0) return employees;
-	const skillByCode = new Map(skills.map((skill) => [skill.code, skill]));
-	const organizationById = new Map(organizations.map((organization) => [String(organization._id), organization]));
+	if (!date) return employees;
+	const lookup = await loadSkillPayLookup(employees);
+	if (!lookup) return employees;
 	return employees.map((employee) => {
-		const skill = skillByCode.get(String(employee.skillCategory || '').trim().toLowerCase());
-		const organization = organizationById.get(String(employee.organizationId || ''));
-		if (!skill || !organization?.governmentType || !organization?.area) return employee;
-		const today = skillBasicOn(skill, organization.governmentType, organization.area, '9999-12-31');
-		const then = skillBasicOn(skill, organization.governmentType, organization.area, date);
-		if (then === null || today === null || Number(employee.basicPay) !== today || then === today) return employee;
-		return { ...employee, basicPay: then, dailySalary: Math.round((Number(employee.dailySalary) - today + then) * 100) / 100 };
+		const dailySalary = dailySalaryOn(employee, date, lookup);
+		if (dailySalary === (Number(employee.dailySalary) || 0)) return employee;
+		const delta = dailySalary - (Number(employee.dailySalary) || 0);
+		return { ...employee, basicPay: Math.round(((Number(employee.basicPay) || 0) + delta) * 100) / 100, dailySalary };
 	});
 }
 
@@ -119,4 +144,13 @@ async function recalculateEmployeeSalaries(employeeFilter = {}) {
 	await Promise.all(updates);
 }
 
-module.exports = { dailySalaryFor, findSkillRate, recalculateEmployeeSalaries, requireSalarySchedule, skillBasicOn, withSkillPayOn };
+module.exports = {
+	dailySalaryFor,
+	dailySalaryOn,
+	findSkillRate,
+	loadSkillPayLookup,
+	recalculateEmployeeSalaries,
+	requireSalarySchedule,
+	skillBasicOn,
+	withSkillPayOn,
+};
