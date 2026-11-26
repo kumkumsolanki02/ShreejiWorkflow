@@ -181,6 +181,10 @@ function matchIntent(text, context = {}) {
     let score = base * (intent.weight || 1);
 
     if (intent.id === 'count_employees' && wantsCount) score += 12;
+    if (intent.id === 'count_payroll_locations' && wantsCount && (containsPhrase(normalized, 'payroll') || containsPhrase(normalized, 'petrol') || containsPhrase(normalized, 'पेरोल'))) {
+      score += 20;
+    }
+    if (intent.id === 'payroll' && wantsCount) score -= 25;
     if (intent.id === 'list_employees' && wantsList && !wantsCount) score += 12;
     if (intent.id === 'get_employee_full' && wantsFull && (mentionsEmployee || context.employeeId)) score += 12;
     if (intent.id === 'get_employee_full' && mentionsLocation && !mentionsEmployee) score -= 30;

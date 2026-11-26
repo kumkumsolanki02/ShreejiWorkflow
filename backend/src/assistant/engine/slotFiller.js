@@ -38,9 +38,9 @@ function extractEntityStatus(text) {
 function isDashboardScope(text) {
   const value = String(text || '').toLowerCase();
   return /\b(?:dashboard|डैशबोर्ड|mere\s+dashboard|my\s+dashboard|overall|total)\b/.test(value)
-    || /(?:kitne|kitni|कितने|कितनी)\s+(?:active\s+|inactive\s+)?(?:locations?|organizations?|organisations?|orgs?|लोकेशन)/i.test(value)
-      && !/\b(?:organization|organisation|org|कंपनी)\s+\w+/.test(value)
-      && !/(?:ke\s+andar|के\s*अंदर).{0,40}(?:location|organization)/i.test(value);
+    || /(?:kitne|kitni|कितने|कितनी)\s+(?:active\s+|inactive\s+)?(?:locations?|organizations?|organisations?|orgs?|employees?|कर्मचारी|लोकेशन)/i.test(value)
+      && !/\b(?:organization|organisation|org|कंपनी|location|लोकेशन)\s+\w+/.test(value)
+      && !/(?:ke\s+andar|के\s*अंदर).{0,40}(?:location|organization|employee)/i.test(value);
 }
 
 function extractFormat(text) {
@@ -78,21 +78,73 @@ async function fillSlots(text, intentResult, sessionSlots = {}, timeZone = 'Asia
   let outputMode = intentResult.outputMode || null;
   const typeHintEarly = detectTypeHint(text);
 
+  // Payroll page Pending count — dashboard-wide, no org required
+  if (intent === 'count_payroll_locations') {
+    return {
+      slots: {
+        organizationId: null,
+        locationId: null,
+        locationIds: null,
+        locationScope: 'dashboard',
+        employeeId: null,
+        month: month || null,
+        date: date || null,
+        status: null,
+        entityStatus: null,
+        fields,
+        format,
+        outputMode: 'count',
+        intent,
+        resolvedType: 'location',
+        soughtName: null,
+        searchTypes: ['location'],
+      },
+      entities: { organization: null, location: null, employee: null },
+      ambiguous: { organizations: [], locations: [], employees: [], crossType: [] },
+      usesContext: false,
+      explicitEmployeeMention: false,
+      explicitLocationMention: true,
+      explicitOrganizationMention: false,
+      soughtEmployeeName: null,
+      typeHint: typeHintEarly,
+      searchTypes: ['location'],
+      crossStatus: 'exact',
+      defaultDate: currentDateInTimeZone(timeZone),
+      defaultMonth: currentMonthInTimeZone(timeZone),
+    };
+  }
+
   // ── Org-scoped actions: resolve org (+ optional location / all locations) ──
   if (isOrgActionIntent(intent)) {
     const entityStatus = extractEntityStatus(text);
-    // Global when: org-count, or location-count on dashboard / without "X ke andar …"
+    // Global when: org-count, location-count, or employee-count on dashboard / without "X ke andar …"
     const globalLocationCount = intent === 'count_locations'
       && (/\bdashboard\b/i.test(text) || !/(?:ke\s*andar|के\s*अंदर)/i.test(text));
+    // Dashboard / bare employee totals — skip org prompt (org/location words still go scoped)
+    const globalEmployeeCount = intent === 'count_employees'
+      && (
+        /\bdashboard\b/i.test(text)
+        || isDashboardScope(text)
+        || (
+          !/(?:ke\s*andar|के\s*अंदर)/i.test(text)
+          && !/\b(?:location|लोकेशन|organization|organisation|\borg\b|कंपनी)\b/i.test(text)
+        )
+      );
 
     // Global / dashboard counts — no org required
-    if (intent === 'count_organizations' || globalLocationCount) {
+    if (intent === 'count_organizations' || globalLocationCount || globalEmployeeCount) {
+      const resolvedType = intent === 'count_organizations'
+        ? 'organization'
+        : (intent === 'count_employees' ? 'employee' : 'location');
+      const searchTypes = intent === 'count_organizations'
+        ? ['organization']
+        : (intent === 'count_employees' ? ['employee'] : ['location']);
       return {
         slots: {
           organizationId: null,
           locationId: null,
           locationIds: null,
-          locationScope: intent === 'count_locations' ? 'dashboard' : null,
+          locationScope: (intent === 'count_locations' || intent === 'count_employees') ? 'dashboard' : null,
           employeeId: null,
           month: month || null,
           date: date || null,
@@ -102,19 +154,19 @@ async function fillSlots(text, intentResult, sessionSlots = {}, timeZone = 'Asia
           format,
           outputMode,
           intent,
-          resolvedType: intent === 'count_organizations' ? 'organization' : 'location',
+          resolvedType,
           soughtName: null,
-          searchTypes: intent === 'count_organizations' ? ['organization'] : ['location'],
+          searchTypes,
         },
         entities: { organization: null, location: null, employee: null },
         ambiguous: { organizations: [], locations: [], employees: [], crossType: [] },
         usesContext: false,
-        explicitEmployeeMention: false,
+        explicitEmployeeMention: intent === 'count_employees',
         explicitLocationMention: intent === 'count_locations',
         explicitOrganizationMention: intent === 'count_organizations',
         soughtEmployeeName: null,
         typeHint: typeHintEarly,
-        searchTypes: intent === 'count_organizations' ? ['organization'] : ['location'],
+        searchTypes,
         crossStatus: 'exact',
         defaultDate: currentDateInTimeZone(timeZone),
         defaultMonth: currentMonthInTimeZone(timeZone),

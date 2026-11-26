@@ -37,8 +37,16 @@ async function getEmployeeData(user, employeeId, {
   };
 }
 
-async function listOrCountEmployees({ organizationId, locationId, mode = 'list', language = 'hi-IN' } = {}) {
-  if (!organizationId && !locationId) {
+async function listOrCountEmployees({
+  organizationId,
+  locationId,
+  mode = 'list',
+  language = 'hi-IN',
+  locationScope = null,
+  entityStatus = 'active',
+} = {}) {
+  const dashboardScope = locationScope === 'dashboard' || (!organizationId && !locationId && mode === 'count');
+  if (!organizationId && !locationId && !dashboardScope) {
     return {
       ok: false,
       reply: language.startsWith('hi')
@@ -46,21 +54,31 @@ async function listOrCountEmployees({ organizationId, locationId, mode = 'list',
         : 'Which organization or location?',
     };
   }
+  const status = entityStatus || 'active';
   const employees = await getEmployeesByFilter({
-    organizationId,
-    locationId,
-    status: 'active',
+    organizationId: organizationId || undefined,
+    locationId: locationId || undefined,
+    status,
   });
 
   if (mode === 'count') {
-    const scope = locationId ? 'location' : 'organization';
-    const reply = `Active employees (${scope}): ${employees.length}`;
+    const label = status === 'inactive' ? 'inactive' : 'active';
+    const scope = locationId ? 'location' : (organizationId ? 'organization' : 'dashboard');
+    const reply = language.startsWith('hi') && scope === 'dashboard'
+      ? `Dashboard में ${label} employees: ${employees.length}`
+      : `${label.charAt(0).toUpperCase()}${label.slice(1)} employees (${scope}): ${employees.length}`;
     return {
       ok: true,
       reply,
-      data: { count: employees.length, employees: employees.map((e) => ({ id: e.id, name: e.name })) },
+      data: { count: employees.length, status, employees: employees.map((e) => ({ id: e.id, name: e.name })) },
       source: 'data',
-      slots: { organizationId: organizationId || null, locationId: locationId || null, outputMode: 'count' },
+      slots: {
+        organizationId: organizationId || null,
+        locationId: locationId || null,
+        locationScope: scope === 'dashboard' ? 'dashboard' : null,
+        entityStatus: status,
+        outputMode: 'count',
+      },
     };
   }
 

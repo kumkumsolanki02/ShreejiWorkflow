@@ -349,6 +349,8 @@ async function executeIntent(user, intent, slots, language, timeZone) {
         locationId: slots.locationId,
         mode: 'list',
         language,
+        locationScope: slots.locationScope,
+        entityStatus: slots.entityStatus || 'active',
       });
     case 'count_employees':
       return listOrCountEmployees({
@@ -356,6 +358,8 @@ async function executeIntent(user, intent, slots, language, timeZone) {
         locationId: slots.locationId,
         mode: 'count',
         language,
+        locationScope: slots.locationScope,
+        entityStatus: slots.entityStatus || 'active',
       });
     case 'count_organizations': {
       const { getOrganizationsByFilter } = require('./entityIndex');
@@ -371,6 +375,53 @@ async function executeIntent(user, intent, slots, language, timeZone) {
           : `Dashboard — ${label} organizations: ${orgs.length}\n${lines.join('\n')}${more}`,
         data: { count: orgs.length, status: entityStatus, organizations: orgs.map((item) => ({ id: item.id, name: item.organizationName })) },
         source: 'data',
+      };
+    }
+    case 'count_payroll_locations': {
+      const { listDocumentLocations } = require('../../services/bankInvoiceService');
+      const month = slots.month || currentMonthInTimeZone(timeZone);
+      const data = await listDocumentLocations(user, { month }, 'payroll');
+      const pending = data.organizations.flatMap((org) => (
+        org.locations
+          .filter((loc) => loc.status === 'pending' && loc.employees > 0)
+          .map((loc) => ({
+            locationId: loc.locationId,
+            locationName: loc.locationName,
+            organizationName: org.organizationName,
+            employees: loc.employees,
+            total: loc.total,
+          }))
+      ));
+      const printed = data.summary?.printed ?? 0;
+      const lines = pending.slice(0, 40).map((item, index) => (
+        `${index + 1}. ${item.locationName} (${item.organizationName}) — ${item.employees} emp`
+      ));
+      const more = pending.length > 40 ? `\n… +${pending.length - 40} more` : '';
+      if (!pending.length) {
+        return {
+          ok: true,
+          reply: language.startsWith('hi')
+            ? `${month} में अभी कोई pending payroll location नहीं है${printed ? ` (printed: ${printed})` : ''}।`
+            : `No pending payroll locations for ${month}${printed ? ` (${printed} already printed)` : ''}.`,
+          data: { month, pending: 0, printed, locations: [] },
+          source: 'data',
+          slots: { month, locationScope: 'dashboard', intent: 'count_payroll_locations' },
+        };
+      }
+      return {
+        ok: true,
+        reply: language.startsWith('hi')
+          ? `${month} — Pending payroll locations: ${pending.length}${printed ? ` · Printed: ${printed}` : ''}\n${lines.join('\n')}${more}`
+          : `${month} — Pending payroll locations: ${pending.length}${printed ? ` · Printed: ${printed}` : ''}\n${lines.join('\n')}${more}`,
+        data: {
+          month,
+          pending: pending.length,
+          printed,
+          locations: pending,
+          summary: data.summary,
+        },
+        source: 'data',
+        slots: { month, locationScope: 'dashboard', intent: 'count_payroll_locations' },
       };
     }
     case 'count_locations': {
@@ -427,7 +478,7 @@ async function executeIntent(user, intent, slots, language, timeZone) {
       return buildSalaryAmount(user, slots, language);
     default:
       if (isDocumentIntent(intent)) {
-        return buildDocumentPlan(intent, slots, language);
+        return buildDocumentPlan(intent, slots, language, user);
       }
       return null;
   }
@@ -896,8 +947,9 @@ async function askAssistantInner(user, input = {}, language, timeZone) {
       && !(slots.organizationId && slots.resolvedType === 'organization');
     const orgActionNeedsOrg = [
       'payroll', 'salary_slip', 'wage_register', 'attendance_register', 'bank_invoice',
-      'list_employees', 'count_employees', 'get_attendance', 'mark_attendance', 'edit_attendance',
-    ].includes(effectiveIntent);
+      'list_employees', 'get_attendance', 'mark_attendance', 'edit_attendance',
+    ].includes(effectiveIntent)
+      || (effectiveIntent === 'count_employees' && slots.locationScope !== 'dashboard');
     const docNeedsLocationChoice = [
       'client_invoice', 'wage_register', 'attendance_register', 'bank_invoice', 'salary_slip', 'payroll',
     ].includes(effectiveIntent);

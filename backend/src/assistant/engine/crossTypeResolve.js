@@ -73,7 +73,8 @@ function decideSearchTypes(text, intent = null, fields = []) {
     return ['employee'];
   }
   if (intent && intent.includes('org')) return ['organization'];
-  if (intent && intent.includes('location') && !['list_employees', 'count_employees'].includes(intent)) {
+  if (intent && intent.includes('location')
+    && !['list_employees', 'count_employees', 'count_payroll_locations'].includes(intent)) {
     return ['location'];
   }
 

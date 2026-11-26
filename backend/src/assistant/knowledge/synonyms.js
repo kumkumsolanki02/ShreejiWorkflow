@@ -45,6 +45,17 @@ const INTENTS = [
     ],
   },
   {
+    id: 'count_payroll_locations',
+    weight: 6,
+    phrases: [
+      'kitni locations ka payroll', 'kitne locations ka payroll', 'locations ka payroll ban sakta',
+      'kitni locations ka petrol', 'payroll pending locations', 'pending payroll locations',
+      'how many locations payroll', 'kitni location ka payroll ban sakta hai',
+      'कितनी location का payroll', 'कितने location का पेरोल', 'payroll बन सकता',
+      'kitni locations printable payroll', 'payroll ke liye kitni locations',
+    ],
+  },
+  {
     id: 'count_employees',
     weight: 5,
     phrases: [
@@ -54,6 +65,8 @@ const INTENTS = [
       'active employees count', 'active employee count', 'total active', 'count active',
       'कितने एक्टिव', 'एक्टिव कितने', 'number of employees', 'employees की संख्या',
       'location में कितने', 'org में कितने', 'organization में कितने',
+      'dashboard employees', 'dashboard mein kitne employee', 'dashboard में कितने employee',
+      'total employees dashboard', 'mere dashboard mein kitne employee',
     ],
   },
   {

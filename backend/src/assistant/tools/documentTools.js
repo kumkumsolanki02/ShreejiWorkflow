@@ -15,7 +15,7 @@ function isDocumentIntent(intent) {
   return DOCUMENT_INTENTS.has(intent);
 }
 
-async function buildDocumentPlan(intent, slots = {}, language = 'hi-IN') {
+async function buildDocumentPlan(intent, slots = {}, language = 'hi-IN', user = null) {
   const month = slots.month || currentMonthInTimeZone();
   const format = slots.format === 'excel' ? 'excel' : 'pdf';
   let organizationId = slots.organizationId || null;
@@ -34,10 +34,10 @@ async function buildDocumentPlan(intent, slots = {}, language = 'hi-IN') {
     locationId = locationId || employee?.locationId || null;
   }
 
-  // Expand "all locations under org" when needed
+  // Expand "all locations under org" when needed (payroll / salary slip too — for scope label)
   if (organizationId && !locationId && !locationIds.length
     && (locationScope === 'all_in_org'
-      || ['wage_register', 'attendance_register', 'bank_invoice'].includes(intent))) {
+      || ['wage_register', 'attendance_register', 'bank_invoice', 'payroll', 'salary_slip'].includes(intent))) {
     const locs = await getLocationsByOrganizationId(organizationId, { status: 'active' });
     locationIds = locs.map((item) => item.id);
   }
@@ -125,9 +125,57 @@ async function buildDocumentPlan(intent, slots = {}, language = 'hi-IN') {
   };
   if (slots.batchId) document.batchId = slots.batchId;
 
-  const replyExtra = multiLocation && language.startsWith('hi')
+  // Same data gate as download: payroll API only returns employees with attendance in range
+  if (user && ['salary_slip', 'payroll'].includes(documentType)) {
+    const { calculatePayrollWithDeductions } = require('../../services/payrollService');
+    const [year, monthNumber] = month.split('-').map(Number);
+    const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+    const fromDate = `${month}-01`;
+    const toDate = `${month}-${String(lastDay).padStart(2, '0')}`;
+    try {
+      const payroll = await calculatePayrollWithDeductions(user, {
+        organizationId: organizationId || undefined,
+        locationId: multiLocation ? undefined : (locationId || undefined),
+        employeeIds: employeeIds || undefined,
+        fromDate,
+        toDate,
+        attendanceOnly: true,
+      });
+      if (!payroll.lines?.length) {
+        return {
+          ok: false,
+          reply: language.startsWith('hi')
+            ? `इस महीने (${month}) के लिए कोई attendance/payroll data नहीं मिला। पहले attendance mark करें, फिर payroll माँगें।`
+            : `No attendance/payroll data for ${month}. Mark attendance first, then ask for payroll.`,
+          source: 'validation',
+          slots: {
+            organizationId,
+            locationId: document.locationId,
+            locationIds: document.locationIds,
+            locationScope: document.locationScope,
+            employeeId: slots.employeeId || null,
+            month,
+            intent: documentType,
+          },
+        };
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        reply: language.startsWith('hi')
+          ? `Payroll नहीं बन पाया: ${error.message || 'error'}`
+          : `Could not build payroll: ${error.message || 'error'}`,
+        source: 'validation',
+      };
+    }
+  }
+
+  // Per-location downloads only for registers / bank letter — payroll is one org-wide file
+  const perLocationDownload = multiLocation
+    && ['wage_register', 'attendance_register', 'bank_invoice'].includes(documentType);
+  const replyExtra = perLocationDownload && language.startsWith('hi')
     ? ` (${locationIds.length} locations — प्रत्येक location की अलग file download होगी।)`
-    : (multiLocation ? ` (${locationIds.length} locations — one file per location.)` : '');
+    : (perLocationDownload ? ` (${locationIds.length} locations — one file per location.)` : '');
 
   return {
     ok: true,
