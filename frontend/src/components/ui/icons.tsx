@@ -136,3 +136,36 @@ export const BuildingIcon = createIcon({
 		/>
 	),
 });
+
+export const HandshakeIcon = createIcon({
+	displayName: 'HandshakeIcon',
+	viewBox: '0 0 24 24',
+	path: (
+		<path
+			fill="currentColor"
+			d="M17.42 10 13 5.57c-.45-.45-.95-.81-1.5-1.07C10.96 4.24 10.4 4.1 9.83 4.1c-.57 0-1.13.14-1.67.4-.55.26-1.05.62-1.5 1.07L2.58 10c-.78.78-.78 2.05 0 2.83l4.24 4.24c.39.39.9.58 1.41.58.51 0 1.02-.19 1.41-.58L13 13.71l.71.71c.39.39.9.58 1.41.58s1.02-.19 1.41-.58l.71-.71.71.71c.39.39.9.58 1.41.58.51 0 1.02-.19 1.41-.58l1.06-1.06c.78-.78.78-2.05 0-2.83L17.42 10zM8.22 15.66 3.99 11.43 8.22 7.2c.59-.59 1.54-.59 2.12 0l4.24 4.24-4.24 4.24c-.59.57-1.54.57-2.12-.02zm10.61-2.83-1.06 1.06-.71-.71c-.59-.59-1.54-.59-2.12 0l-.71.71-4.24-4.24 4.24-4.24c.59-.59 1.54-.59 2.12 0l4.24 4.24c.59.58.59 1.53 0 2.12z"
+		/>
+	),
+});
+
+export const SiteMapIcon = createIcon({
+	displayName: 'SiteMapIcon',
+	viewBox: '0 0 24 24',
+	path: (
+		<path
+			fill="currentColor"
+			d="M3 3h8v8H3V3Zm2 2v4h4V5H5Zm10-2h6v6h-6V3Zm2 2v2h2V5h-2ZM3 13h6v8H3v-8Zm2 2v4h2v-4H5Zm8-2h10v4h-3v6h-7v-10Zm2 2v6h3v-4h3v-2h-6Z"
+		/>
+	),
+});
+
+export const ShieldCheckIcon = createIcon({
+	displayName: 'ShieldCheckIcon',
+	viewBox: '0 0 24 24',
+	path: (
+		<path
+			fill="currentColor"
+			d="M12 2 4 5v6c0 5 3.4 9.7 8 11 4.6-1.3 8-6 8-11V5l-8-3Zm-1.2 14.2-3.5-3.5 1.4-1.4 2.1 2.1 4.6-4.6 1.4 1.4-6 6Z"
+		/>
+	),
+});

@@ -7,6 +7,7 @@ type AuthLayoutProps = {
   storyPanel: ReactNode;
   mobileFooter?: ReactNode;
   cornerNote?: ReactNode;
+  showMobileBrandMark?: boolean;
   children: ReactNode;
 };
 
@@ -70,7 +71,7 @@ function BackgroundArt() {
   );
 }
 
-function AuthLayout({ storyPanel, mobileFooter, cornerNote, children }: AuthLayoutProps) {
+function AuthLayout({ storyPanel, mobileFooter, cornerNote, showMobileBrandMark = true, children }: AuthLayoutProps) {
   return (
     <Box
       position="relative"
@@ -85,11 +86,11 @@ function AuthLayout({ storyPanel, mobileFooter, cornerNote, children }: AuthLayo
         minH="100dvh"
         maxW={{ base: '480px', lg: 'none' }}
         mx="auto"
-        templateColumns={{ base: '1fr', lg: 'minmax(0, 41fr) minmax(320px, 30.5fr)' }}
+        templateColumns={{ base: '1fr', lg: 'minmax(0, 1.2fr) minmax(420px, 0.9fr)' }}
         templateRows={{ base: 'auto 1fr auto', lg: '1fr' }}
-        columnGap="9vw"
-        pl={{ base: 5, sm: 6, lg: '10vw' }}
-        pr={{ base: 5, sm: 6, lg: '7.5vw' }}
+        columnGap={{ lg: '5vw' }}
+        pl={{ base: 5, sm: 6, lg: '8vw' }}
+        pr={{ base: 5, sm: 6, lg: '5vw' }}
       >
         <Grid
           templateRows={{ base: 'auto', lg: 'auto minmax(0, 1fr)' }}
@@ -101,7 +102,7 @@ function AuthLayout({ storyPanel, mobileFooter, cornerNote, children }: AuthLayo
             display={{ base: 'none', lg: 'flex' }}
             align="flex-end"
             minH={0}
-            ml="-10vw"
+            ml="-8vw"
             pt={4}
           >
             <Image
@@ -125,37 +126,39 @@ function AuthLayout({ storyPanel, mobileFooter, cornerNote, children }: AuthLayo
         <Flex
           align="center"
           justify="center"
-          pt={{ base: '48px', lg: 10 }}
+          pt={{ base: showMobileBrandMark ? '48px' : 4, lg: 10 }}
           pb={{ base: 'clamp(12px, 2dvh, 20px)', lg: 10 }}
         >
           <Box
             position="relative"
             w="full"
-            maxW={{ base: 'none', lg: '440px' }}
+            maxW={{ base: 'none', lg: '430px' }}
             bg="white"
             border="1px solid"
             borderColor="#EEF0FB"
-            borderRadius={{ base: '26px', lg: '16px' }}
-            boxShadow="0 24px 60px -24px rgba(49, 46, 129, 0.22)"
-            px={{ base: 5, sm: 6, lg: 'clamp(24px, 2.5vw, 36px)' }}
-            pt={{ base: '52px', lg: 'clamp(24px, 2.8vw, 40px)' }}
-            pb={{ base: 'clamp(14px, 2.4dvh, 20px)', lg: 'clamp(24px, 2.8vw, 40px)' }}
+            borderRadius="24px"
+            boxShadow="0 28px 64px -28px rgba(49, 46, 129, 0.28)"
+            px={{ base: 5, sm: 6, lg: '32px' }}
+            pt={{ base: showMobileBrandMark ? '52px' : 5, lg: '28px' }}
+            pb={{ base: 5, lg: '26px' }}
           >
-            <Center
-              display={{ base: 'flex', lg: 'none' }}
-              position="absolute"
-              top="-40px"
-              left="50%"
-              transform="translateX(-50%)"
-              boxSize="88px"
-              borderRadius="full"
-              bg="white"
-              boxShadow="0 -10px 24px -14px rgba(49, 46, 129, 0.25)"
-            >
-              <Center boxSize="72px" borderRadius="full" bg="#ECEDFC">
-                <BrandMark boxSize="40px" />
+            {showMobileBrandMark && (
+              <Center
+                display={{ base: 'flex', lg: 'none' }}
+                position="absolute"
+                top="-40px"
+                left="50%"
+                transform="translateX(-50%)"
+                boxSize="120px"
+                borderRadius="full"
+                bg="white"
+                boxShadow="0 -10px 24px -14px rgba(49, 46, 129, 0.25)"
+              >
+                <Center boxSize="100px" borderRadius="full" bg="#ECEDFC">
+                  <BrandMark boxSize="80px" />
+                </Center>
               </Center>
-            </Center>
+            )}
             {children}
           </Box>
         </Flex>

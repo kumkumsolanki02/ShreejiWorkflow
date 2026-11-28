@@ -1,4 +1,4 @@
-import { Box, HStack, Icon, Text, type IconProps } from '@chakra-ui/react';
+import { Box, HStack, Image, Text, type ImageProps } from '@chakra-ui/react';
 
 type BrandLogoProps = {
   compact?: boolean;
@@ -6,15 +6,15 @@ type BrandLogoProps = {
   size?: 'sm' | 'md';
 };
 
-export function BrandMark(props: IconProps) {
+export function BrandMark(props: ImageProps) {
   return (
-    <Icon viewBox="0 0 56 48" color="brand.500" aria-hidden="true" {...props}>
-      <circle cx="28" cy="10" r="8" fill="currentColor" />
-      <circle cx="10" cy="19" r="6" fill="currentColor" />
-      <circle cx="46" cy="19" r="6" fill="currentColor" />
-      <path d="M13 37c0-9 6-16 15-16s15 7 15 16c0 4-3 7-7 7H20c-4 0-7-3-7-7Z" fill="currentColor" />
-      <path d="M1 37c0-7 4-12 10-12 2 0 4 1 5 2-3 3-5 7-5 12v4H7c-4 0-6-2-6-6Zm54 0c0-7-4-12-10-12-2 0-4 1-5 2 3 3 5 7 5 12v4h4c4 0 6-2 6-6Z" fill="currentColor" />
-    </Icon>
+    <Image
+      src="/logo.png"
+      alt="Shreeji Caretaker"
+      objectFit="contain"
+      aria-hidden="true"
+      {...props}
+    />
   );
 }
 
@@ -23,7 +23,7 @@ function BrandLogo({ compact = false, isDark = false, size = 'md' }: BrandLogoPr
 
   return (
     <HStack spacing={isSmall ? 2.5 : 3} align="center" color={isDark ? 'white' : 'slate.900'}>
-      <BrandMark boxSize={isSmall ? 9 : compact ? 12 : 11} />
+      <BrandMark boxSize={isSmall ? 18 : compact ? 20 : 16} />
       <Box>
         <Text
           fontFamily="heading"

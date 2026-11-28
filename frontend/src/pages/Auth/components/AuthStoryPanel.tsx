@@ -1,19 +1,8 @@
 import { Box, Flex, HStack, Heading, Image, Text, createIcon } from '@chakra-ui/react';
-import BrandLogo from '../../../components/layout/BrandLogo';
+import { BrandMark } from '../../../components/layout/BrandLogo';
 import { PeopleIcon } from '../../../components/ui/icons';
 import loginTeamMobile from '../../../assets/login-team-mobile.png';
 import FeatureTile from './FeatureTile';
-
-const BriefcaseIcon = createIcon({
-    displayName: 'BriefcaseIcon',
-    viewBox: '0 0 24 24',
-    path: (
-        <path
-            fill="currentColor"
-            d="M9 3h6a2 2 0 0 1 2 2v1h3a2 2 0 0 1 2 2v4H2V8a2 2 0 0 1 2-2h3V5a2 2 0 0 1 2-2Zm0 3h6V5H9v1Zm-7 8h8v1a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-1h8v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5Z"
-        />
-    ),
-});
 
 const CalendarIcon = createIcon({
     displayName: 'CalendarIcon',
@@ -73,30 +62,43 @@ export function AuthMobileFeatures() {
     );
 }
 
+function AuthBrandHeader() {
+    return (
+        <HStack
+            display={{ base: 'none', lg: 'flex' }}
+            spacing={0}
+            align="center"
+            justify="flex-start"
+        >
+            <BrandMark boxSize="84px" flexShrink={0} mr="16px" />
+            <Box w="1.5px" h="62px" bg="#D1D5E0" flexShrink={0} mr="16px" />
+            <Box textAlign="left" minW={0}>
+                <Text
+                    fontFamily="heading"
+                    fontSize="28px"
+                    fontWeight="800"
+                    color="#1E293B"
+                    lineHeight="1.12"
+                    letterSpacing="-0.03em"
+                >
+                    Shreeji Caretaker
+                </Text>
+                <Text mt="7px" fontSize="15px" color="#94A3B8" fontWeight="500" lineHeight="1.3">
+                    Manpower &amp; Workforce Solutions
+                </Text>
+            </Box>
+        </HStack>
+    );
+}
+
 function AuthStoryPanel() {
     return (
         <Box position="relative" color="slate.900">
-            <BrandLogo compact size="sm" />
-
-            <HStack
-                display={{ base: 'none', lg: 'inline-flex' }}
-                mt="7vh"
-                spacing={2}
-                px={3}
-                py={2}
-                borderRadius="md"
-                bg="#E6E7FB"
-                color="brand.500"
-            >
-                <BriefcaseIcon boxSize="18px" />
-                <Text fontSize="13px" fontWeight="500" color="brand.600">
-                    HR Management Solution
-                </Text>
-            </HStack>
+            <AuthBrandHeader />
 
             <Heading
                 as="h2"
-                mt={{ base: 'clamp(12px, 2.6dvh, 24px)', lg: '1.6vh' }}
+                mt={{ base: 'clamp(12px, 2.6dvh, 24px)', lg: '3.2vh' }}
                 maxW={{ base: '230px', sm: '250px', lg: 'none' }}
                 fontSize={{ base: 'clamp(22px, 3.1dvh, 26px)', sm: 'clamp(22px, 3.1dvh, 28px)', lg: 'clamp(2rem, min(3.3vw, 5.8vh), 3.6rem)' }}
                 lineHeight={{ base: '1.12', lg: '1.06' }}

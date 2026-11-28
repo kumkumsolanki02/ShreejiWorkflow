@@ -6,8 +6,8 @@ import {
   createIcon,
   Flex,
   HStack,
-  Icon,
   IconButton,
+  Image,
   Text,
   Tooltip,
   VStack,
@@ -91,20 +91,7 @@ function DashboardSidebar({ activeTab, onSelectTab, onNavigate, userName, role }
       sx={{ scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}
     >
       <HStack h="72px" px={5} spacing={3} flexShrink={0}>
-        <Flex
-          w="40px"
-          h="40px"
-          align="center"
-          justify="center"
-          borderRadius="12px"
-          bgGradient="linear(135deg, brand.500, purple.500)"
-          color="white"
-          boxShadow="0 6px 16px rgba(79, 70, 229, 0.35)"
-        >
-          <Icon viewBox="0 0 24 24" boxSize={5}>
-            <path fill="currentColor" d="M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 20a8 8 0 0 1 16 0H4Zm-2-1a6 6 0 0 1 4-5.66A9.9 9.9 0 0 0 3 20H2v-1Zm20 1h-1a9.9 9.9 0 0 0-3-6.66A6 6 0 0 1 22 20Z" />
-          </Icon>
-        </Flex>
+        <Image src="/logo.png" alt="Shreeji Caretaker" boxSize="60px" objectFit="contain" flexShrink={0} />
         <Box minW={0}>
           <Text fontSize="md" fontWeight="800" color="slate.900" lineHeight="1.2" letterSpacing="-0.01em">Shreeji Caretaker</Text>
           <Text fontSize="xs" color="slate.500">People management</Text>

@@ -1,7 +1,6 @@
 import { ArrowForwardIcon, EmailIcon, LockIcon, ViewIcon, ViewOffIcon } from '@chakra-ui/icons';
 import {
   Button,
-  Center,
   Checkbox,
   FormControl,
   HStack,
@@ -12,7 +11,6 @@ import {
   InputRightElement,
   Stack,
   Text,
-  useBreakpointValue,
   useToast,
 } from '@chakra-ui/react';
 import { useState, type FormEvent } from 'react';
@@ -25,6 +23,8 @@ type LoginResponse = {
   user: User;
 };
 
+const ACCENT = '#6366F1';
+
 function LoginForm() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -33,25 +33,30 @@ function LoginForm() {
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const isDesktop = useBreakpointValue({ base: false, lg: true }, { ssr: false });
+
   const inputStyles = {
-    h: { base: 'clamp(44px, 6dvh, 50px)', lg: 'clamp(42px, 3.6vw, 52px)' },
-    pl: 12,
+    h: '46px',
+    pl: '44px',
     bg: 'white',
-    color: 'slate.900',
-    fontSize: 'md',
-    borderColor: '#E3E5F0',
-    borderRadius: { base: '13px', lg: '10px' },
-    _placeholder: { color: 'slate.500' },
+    color: '#0F172A',
+    fontSize: '14px',
+    borderWidth: '1.5px',
+    borderColor: '#E5E7EB',
+    borderRadius: '12px',
+    _placeholder: { color: '#94A3B8', fontSize: '14px' },
     _hover: { borderColor: '#C7CAF3' },
-    _focusVisible: { borderColor: 'brand.500', boxShadow: '0 0 0 3px rgba(79, 70, 229, 0.15)' },
+    _focusVisible: {
+      borderColor: ACCENT,
+      boxShadow: '0 0 0 3px rgba(99, 102, 241, 0.14)',
+    },
   };
+
   const inputIconStyles = {
     h: 'full',
-    w: 12,
+    w: '44px',
     pointerEvents: 'none' as const,
-    color: '#6B7083',
-    fontSize: { base: 'lg', lg: 'md' },
+    color: '#94A3B8',
+    fontSize: '15px',
   };
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -87,11 +92,11 @@ function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit}>
-      <Stack spacing={{ base: 'clamp(8px, 1.4dvh, 12px)', lg: 3.5 }} mt={{ base: 'clamp(14px, 2.4dvh, 20px)', lg: 6 }} textAlign="left">
+      <Stack spacing="12px" textAlign="left" w="full">
         <FormControl isRequired>
           <InputGroup>
             <InputLeftElement {...inputIconStyles}>
-              <EmailIcon />
+              <EmailIcon boxSize="15px" />
             </InputLeftElement>
             <Input
               {...inputStyles}
@@ -109,11 +114,11 @@ function LoginForm() {
         <FormControl isRequired>
           <InputGroup>
             <InputLeftElement {...inputIconStyles}>
-              <LockIcon />
+              <LockIcon boxSize="15px" />
             </InputLeftElement>
             <Input
               {...inputStyles}
-              pr={12}
+              pr="44px"
               autoComplete="current-password"
               name="password"
               type={showPassword ? 'text' : 'password'}
@@ -122,37 +127,60 @@ function LoginForm() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
-            <InputRightElement h="full" w={12}>
+            <InputRightElement h="full" w="44px">
               <IconButton
                 variant="ghost"
                 size="sm"
-                color="#6B7083"
-                fontSize={{ base: 'lg', lg: 'md' }}
+                color="#94A3B8"
+                minW="auto"
+                h="auto"
+                p={1}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
-                icon={showPassword ? <ViewOffIcon /> : <ViewIcon />}
+                icon={showPassword ? <ViewOffIcon boxSize="15px" /> : <ViewIcon boxSize="15px" />}
                 onClick={() => setShowPassword((visible) => !visible)}
+                _hover={{ bg: 'transparent', color: '#64748B' }}
               />
             </InputRightElement>
           </InputGroup>
         </FormControl>
 
-        <HStack justify="space-between" align="center" flexWrap="wrap" spacing={2} pt={{ base: 0, lg: 0.5 }}>
+        <HStack justify="space-between" align="center">
           <Checkbox
             colorScheme="brand"
-            size={{ base: 'lg', lg: 'md' }}
+            size="md"
             isChecked={rememberMe}
             onChange={(event) => setRememberMe(event.target.checked)}
-            sx={{ '.chakra-checkbox__control': { borderRadius: '4px' } }}
+            sx={{
+              '.chakra-checkbox__control': {
+                borderRadius: '4px',
+                borderColor: '#CBD5E1',
+                w: '15px',
+                h: '15px',
+                _checked: {
+                  bg: ACCENT,
+                  borderColor: ACCENT,
+                  color: 'white',
+                },
+              },
+              '.chakra-checkbox__label': {
+                pl: '6px',
+              },
+            }}
           >
-            <Text as="span" fontSize={{ base: 'md', lg: 'sm' }} color="slate.700">Remember me</Text>
+            <Text as="span" fontSize="13px" color="#475569" fontWeight="400">
+              Remember me
+            </Text>
           </Checkbox>
           <Button
             variant="link"
-            color="brand.500"
-            fontSize={{ base: 'md', lg: 'sm' }}
+            color={ACCENT}
+            fontSize="13px"
             fontWeight="600"
             type="button"
+            h="auto"
+            minW="auto"
             onClick={() => navigate('/forgot-password')}
+            _hover={{ color: '#4F46E5', textDecoration: 'none' }}
           >
             Forgot password?
           </Button>
@@ -160,25 +188,18 @@ function LoginForm() {
 
         <Button
           type="submit"
-          h={{ base: 'clamp(46px, 6.2dvh, 52px)', lg: 'clamp(42px, 3.6vw, 52px)' }}
-          mt={{ base: 1, lg: 1.5 }}
-          borderRadius={{ base: '16px', lg: '10px' }}
-          bg="linear-gradient(90deg, #5B4BE0 0%, #4F46E5 100%)"
+          h="46px"
+          borderRadius="12px"
+          bg={`linear-gradient(90deg, #5B5FEF 0%, ${ACCENT} 40%, #818CF8 100%)`}
           color="white"
-          fontSize={{ base: 'lg', lg: 'md' }}
+          fontSize="14.5px"
           fontWeight="600"
-          boxShadow="0 12px 24px -10px rgba(79, 70, 229, 0.6)"
-          _hover={{ bg: 'linear-gradient(90deg, #5143D4 0%, #4338CA 100%)' }}
-          _active={{ bg: '#4338CA' }}
-          leftIcon={
-            isDesktop ? undefined : (
-              <Center boxSize="28px" borderRadius="full" bg="white" color="brand.500">
-                <ArrowForwardIcon boxSize={4} />
-              </Center>
-            )
-          }
-          rightIcon={isDesktop ? <ArrowForwardIcon /> : undefined}
-          iconSpacing={isDesktop ? 2 : 3}
+          letterSpacing="0.01em"
+          boxShadow="0 12px 24px -12px rgba(99, 102, 241, 0.65)"
+          _hover={{ bg: 'linear-gradient(90deg, #4F46E5 0%, #5B5FEF 45%, #6366F1 100%)' }}
+          _active={{ bg: '#4F46E5' }}
+          rightIcon={<ArrowForwardIcon boxSize="15px" />}
+          iconSpacing="8px"
           isLoading={isSubmitting}
           loadingText="Signing in"
         >
