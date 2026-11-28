@@ -28,6 +28,8 @@ import EmployeesPage from '../Employees/EmployeesPage';
 import SettingsPage from '../Settings/SettingsPage';
 import TicketsPage from '../Tickets/TicketsPage';
 import DashboardHome from './components/DashboardHome';
+import SeoHead from '../../seo/SeoHead';
+import { SEO_PAGES } from '../../seo/siteConfig';
 
 type DashboardPageProps = {
   role: UserRole;
@@ -90,6 +92,7 @@ function DashboardPage({ role }: DashboardPageProps) {
 
   return (
     <Flex h="100vh" minH={0} overflow="hidden" bg="slate.50">
+      <SeoHead {...(role === 'admin' ? SEO_PAGES.adminDashboard : SEO_PAGES.orgDashboard)} />
       <Box display={{ base: 'none', lg: 'block' }}>
         <DashboardSidebar
           activeTab={activeTab}

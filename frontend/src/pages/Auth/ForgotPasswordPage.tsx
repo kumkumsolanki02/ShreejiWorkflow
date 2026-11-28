@@ -19,6 +19,8 @@ import BrandLogo from '../../components/layout/BrandLogo';
 import AuthLayout from '../../components/layout/AuthLayout';
 import api, { ApiError } from '../../services/api';
 import AuthStoryPanel, { AuthMobileFeatures } from './components/AuthStoryPanel';
+import SeoHead from '../../seo/SeoHead';
+import { SEO_PAGES } from '../../seo/siteConfig';
 
 function ForgotPasswordPage() {
     const toast = useToast();
@@ -49,6 +51,7 @@ function ForgotPasswordPage() {
 
     return (
         <AuthLayout storyPanel={<AuthStoryPanel />} mobileFooter={<AuthMobileFeatures />}>
+            <SeoHead {...SEO_PAGES.forgotPassword} />
             <Stack align="stretch" spacing={0} textAlign="center" color="slate.900">
                 <Flex display={{ base: 'none', lg: 'flex' }} justify="center" mb={7}>
                     <BrandLogo compact />

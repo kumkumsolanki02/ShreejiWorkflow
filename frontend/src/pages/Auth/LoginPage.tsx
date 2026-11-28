@@ -8,6 +8,8 @@ import LoginForm from './components/LoginForm';
 import AuthLayout from '../../components/layout/AuthLayout';
 import { getDashboardPath } from '../../app/authorization';
 import { getSessionUser } from '../../services/api';
+import SeoHead from '../../seo/SeoHead';
+import { SEO_PAGES } from '../../seo/siteConfig';
 
 function LoginPage() {
     const navigate = useNavigate();
@@ -44,6 +46,7 @@ function LoginPage() {
 
     return (
         <AuthLayout storyPanel={<AuthStoryPanel />} mobileFooter={<AuthMobileFeatures />} cornerNote={<DeveloperContact fontSize="xs" />}>
+            <SeoHead {...SEO_PAGES.login} />
             <Stack align="stretch" spacing={0} textAlign="center" color="slate.900">
                 <Flex display={{ base: 'none', lg: 'flex', xl: 'none' }} justify="center" mb={5}>
                     <BrandLogo compact size="sm" />

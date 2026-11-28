@@ -1,0 +1,16 @@
+# Shreeji Caretaker — https://shreejicaretaker.com
+User-agent: *
+Allow: /
+Allow: /manpower-supply
+Allow: /services
+Allow: /about
+Allow: /contact
+Allow: /login
+
+Disallow: /admin/
+Disallow: /organization/
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /api/
+
+Sitemap: https://shreejicaretaker.com/sitemap.xml
